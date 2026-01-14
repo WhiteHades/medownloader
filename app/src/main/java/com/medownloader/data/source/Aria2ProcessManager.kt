@@ -57,8 +57,14 @@ class Aria2ProcessManager(private val context: Context) {
             val sessionFile = File(context.filesDir, "aria2.session")
             val downloadDir = File(context.filesDir, "downloads")
             downloadDir.mkdirs()
+            
+            // Create session file if it doesn't exist (required for --input-file)
+            if (!sessionFile.exists()) {
+                sessionFile.createNewFile()
+                Log.d(TAG, "Created new session file: ${sessionFile.absolutePath}")
+            }
 
-            val command = listOf(
+            val command = mutableListOf(
                 binaryPath,
                 // RPC Options (from docs: RPC Options section)
                 "--enable-rpc=true",

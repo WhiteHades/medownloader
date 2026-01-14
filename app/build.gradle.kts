@@ -20,6 +20,11 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        
+        // include all ABIs for aria2c binary
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        }
     }
 
     buildTypes {
@@ -39,9 +44,18 @@ android {
         compose = true
         buildConfig = true
     }
+    
+    // ensure jniLibs are packaged correctly
+    sourceSets {
+        getByName("main").jniLibs.srcDirs("src/main/jniLibs")
+    }
+    
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 }
@@ -53,12 +67,13 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.activity:activity-compose:1.9.3")
     
-    // Compose BOM (2026)
-    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    // Compose BOM (2025)
+    implementation(platform("androidx.compose:compose-bom:2025.01.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    // Material 3 Expressive (1.4.0-alpha11+ for ToggleButton, shapes, SplitButtonLayout)
+    implementation("androidx.compose.material3:material3:1.4.0-alpha11")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-text-google-fonts:1.7.6")
     

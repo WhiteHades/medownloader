@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appTheme by viewModel.appTheme.collectAsStateWithLifecycle()
             
-            MeDownloaderTheme(theme = appTheme) {
+            MeDownloaderTheme(appTheme = appTheme) {
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
                 
@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
                                 wifiOnly = wifiOnly,
                                 maxConcurrent = maxConcurrent,
                                 connectionLimit = connectionLimit,
-                                downloadPath = downloadDir,
+                                downloadPath = downloadDir ?: "Default (Downloads)",
                                 onThemeSelected = viewModel::updateTheme,
                                 onWifiOnlyChanged = viewModel::updateWifiOnly,
                                 onMaxConcurrentChanged = viewModel::updateMaxConcurrent,
