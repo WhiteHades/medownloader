@@ -1,274 +1,395 @@
 package com.medownloader.presentation.screen
+import com.medownloader.util.formatSize
+import androidx.compose.ui.res.stringResource
 
 import android.view.HapticFeedbackConstants
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.medownloader.data.repository.FileInfo
-import com.medownloader.ui.theme.BottomSheetShape
-import com.medownloader.ui.theme.CardShape
-import com.medownloader.ui.theme.ExpressiveMotion
-import com.medownloader.ui.theme.InputFieldShape
-import com.medownloader.ui.theme.MonoTextStyle
-import com.medownloader.ui.theme.Shapes
+import com.medownloader.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+import com.medownloader.R
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AddDownloadSheet(
-    fileInfo: com.medownloader.data.repository.FileInfo?,
+    fileInfo: FileInfo?,
     isLoading: Boolean,
     pendingUrl: String?,
     onFetchInfo: (String) -> Unit,
-    onConfirmAdd: (url: String, filename: String) -> Unit,
+    onConfirmAdd: (url: String, filename: String?) -> Unit,
     onDismiss: () -> Unit,
+    isPremium: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val clipboardManager = LocalClipboardManager.current
     val view = LocalView.current
-
-    var url by remember { mutableStateOf(pendingUrl ?: "") }
-    var filename by remember { mutableStateOf("") }
-
-    LaunchedEffect(fileInfo) {
-        fileInfo?.let {
-            filename = it.filename
-        }
+    val clipboardManager = LocalClipboardManager.current
+    val focusRequester = remember { FocusRequester() }
+    
+    // Local URL state, initialized from pendingUrl
+    var url by remember(pendingUrl) { mutableStateOf(pendingUrl ?: "") }
+    
+    // Auto-focus URL field
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
-
-    LaunchedEffect(pendingUrl) {
-        pendingUrl?.let { url = it }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = BottomSheetShape,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(vertical = 12.dp)
-                    .size(width = 32.dp, height = 4.dp)
-                    .clip(Shapes.extraSmall)
-                    .background(MaterialTheme.colorScheme.outlineVariant)
-            )
-        }
+    
+    // Sheet content with spring animation
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = ExpressiveShapeTokens.BottomSheet
     ) {
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
-                .animateContentSize()
+                .padding(horizontal = 24.dp)
+                .padding(top = 12.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Text(
-                text = "new download",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
+            // Drag handle
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier.size(width = 40.dp, height = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = ExpressiveShapeTokens.Full
+                ) {}
+            }
+            
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.add_download_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.add_download_close_desc),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            
+            // URL Input with paste button
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
-                label = { Text("url") },
-                placeholder = { Text("paste download link") },
-                leadingIcon = { Icon(Icons.Outlined.Link, contentDescription = null) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
+                label = { Text(stringResource(R.string.add_download_url_label)) },
+                placeholder = { Text(stringResource(R.string.add_download_url_placeholder)) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.Link,
+                        contentDescription = null,
+                        tint = if (url.isNotEmpty() && isValidUrl(url))
+                            MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
                 trailingIcon = {
-                    IconButton(onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                        clipboardManager.getText()?.text?.let {
-                            url = it
-                            onFetchInfo(it)
+                    Row {
+                        if (url.isNotEmpty()) {
+                            IconButton(onClick = { url = "" }) {
+                                Icon(
+                                    Icons.Filled.Clear,
+                                    contentDescription = stringResource(R.string.add_download_clear_desc),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                    }) {
-                        Icon(Icons.Default.ContentPaste, contentDescription = "paste")
+                        IconButton(onClick = {
+                            clipboardManager.getText()?.text?.let { pastedUrl ->
+                                url = pastedUrl
+                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            }
+                        }) {
+                            Icon(
+                                Icons.Outlined.ContentPaste,
+                                contentDescription = stringResource(R.string.add_download_paste_desc),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 },
                 singleLine = true,
-                shape = InputFieldShape,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Go
+                ),
+                keyboardActions = KeyboardActions(
+                    onGo = {
+                        if (url.isNotEmpty() && isValidUrl(url)) {
+                            if (fileInfo != null) {
+                                onConfirmAdd(url, fileInfo.filename)
+                            } else {
+                                onFetchInfo(url)
+                            }
+                        }
+                    }
+                ),
+                shape = ExpressiveShapes.large,
                 colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
+                )
             )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
+            
+            // URL validation indicator
+            AnimatedVisibility(
+                visible = url.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                if (isValidUrl(url)) {
+                    UrlValidCard(url = url)
+                } else {
+                    UrlInvalidCard()
+                }
+            }
+            
+            // File info preview (when available)
+            AnimatedVisibility(
+                visible = fileInfo != null,
+                enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) + 
+                        expandVertically(spring(dampingRatio = 0.7f)),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                fileInfo?.let { info ->
+                    FileInfoCard(info = info, isPremium = isPremium)
+                }
+            }
+            
+            // Loading state
             AnimatedVisibility(
                 visible = isLoading,
-                enter = fadeIn(),
-                exit = fadeOut()
+                enter = fadeIn() + scaleIn(initialScale = 0.9f),
+                exit = fadeOut() + scaleOut(targetScale = 0.9f)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(Modifier.width(12.dp))
+                LoadingCard()
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Action button - Fetch info or confirm download
+            if (fileInfo != null) {
+                ExpressiveDownloadButton(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        onConfirmAdd(url, fileInfo.filename)
+                    },
+                    enabled = !isLoading,
+                    text = stringResource(R.string.add_download_start)
+                )
+            } else {
+                ExpressiveDownloadButton(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        if (url.isNotEmpty() && isValidUrl(url)) {
+                            onFetchInfo(url)
+                        }
+                    },
+                    enabled = url.isNotEmpty() && isValidUrl(url) && !isLoading,
+                    text = stringResource(R.string.add_download_add)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UrlValidCard(url: String) {
+    Surface(
+        color = SuccessGreen90.copy(alpha = 0.5f),
+        shape = ExpressiveShapes.medium
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = SuccessGreen40
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.add_download_valid_url),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SuccessGreen30
+                )
+                Text(
+                    text = extractDomain(url),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SuccessGreen40,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UrlInvalidCard() {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+        shape = ExpressiveShapes.medium
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.Error,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+            Text(
+                text = stringResource(R.string.add_download_invalid_url),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
+private fun FileInfoCard(info: FileInfo, isPremium: Boolean) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = ExpressiveShapeTokens.CardSoft
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "fetching file info...",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = info.filename,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = info.mimeType ?: stringResource(R.string.add_download_unknown_type),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-
-            AnimatedVisibility(
-                visible = fileInfo != null && !isLoading,
-                enter = fadeIn() + slideInVertically { it / 2 },
-                exit = fadeOut()
-            ) {
-                fileInfo?.let { info ->
-                    FileInfoCard(
-                        filename = filename,
-                        size = info.size ?: 0L,
-                        mimeType = info.mimeType,
-                        onFilenameChange = { filename = it }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            val interactionSource = remember { MutableInteractionSource() }
-            val isPressed by interactionSource.collectIsPressedAsState()
-            val scale by animateFloatAsState(
-                targetValue = if (isPressed) 0.96f else 1f,
-                animationSpec = ExpressiveMotion.MicroBounce,
-                label = "buttonScale"
-            )
-
-            Button(
-                onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                    if (url.isNotBlank()) {
-                        onConfirmAdd(url, filename.ifBlank { "download" })
+                
+                info.size?.let { size ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = ExpressiveShapeTokens.Full
+                    ) {
+                        Text(
+                            text = formatSize(size),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MonoTextStyleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
-                },
-                enabled = url.isNotBlank() && !isLoading,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .scale(scale),
-                shape = Shapes.medium,
-                interactionSource = interactionSource,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                }
+            }
+            
+            // Resume support indicator
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Download, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
+                Icon(
+                    if (info.resumable) Icons.Filled.Check else Icons.Filled.Close,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = if (info.resumable) SuccessGreen40 else MaterialTheme.colorScheme.error
+                )
                 Text(
-                    "start download",
-                    fontWeight = FontWeight.Bold
+                    text = if (info.resumable) stringResource(R.string.add_download_resume_supported) else stringResource(R.string.add_download_resume_not_supported),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun FileInfoCard(
-    filename: String,
-    size: Long,
-    mimeType: String?,
-    onFilenameChange: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            OutlinedTextField(
-                value = filename,
-                onValueChange = onFilenameChange,
-                label = { Text("filename") },
-                leadingIcon = { Icon(Icons.Outlined.Description, contentDescription = null) },
-                singleLine = true,
-                shape = InputFieldShape,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                InfoChip(
-                    icon = Icons.Outlined.Storage,
-                    label = formatBytes(size)
-                )
-                mimeType?.let {
-                    InfoChip(
-                        icon = Icons.Outlined.Description,
-                        label = it.substringAfter("/")
-                    )
+            
+            // Speed boost hint for non-premium
+            val fileSize = info.size ?: 0L
+            if (!isPremium && fileSize > 100 * 1024 * 1024) { // > 100MB
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                    shape = ExpressiveShapes.small
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.Bolt,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                        Text(
+                            text = stringResource(R.string.add_download_large_file_hint),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
                 }
             }
         }
@@ -276,36 +397,88 @@ fun FileInfoCard(
 }
 
 @Composable
-fun InfoChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    modifier: Modifier = Modifier
+private fun LoadingCard() {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = ExpressiveShapes.medium
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 3.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = stringResource(R.string.add_download_fetching),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ExpressiveDownloadButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    text: String = "Start Download"
 ) {
-    Row(
-        modifier = modifier
-            .clip(Shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = ExpressiveMotion.MicroBounce,
+        label = "buttonScale"
+    )
+    
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .scale(scale),
+        enabled = enabled,
+        interactionSource = interactionSource,
+        // M3 Expressive: Use shapes parameter for morphing shape support
+        shapes = ButtonDefaults.shapes(),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+        )
     ) {
         Icon(
-            icon,
+            Icons.Filled.Download,
             contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            modifier = Modifier.size(22.dp)
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
-            label,
-            style = MonoTextStyle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
 
-private fun formatBytes(bytes: Long): String = when {
-    bytes >= 1_000_000_000 -> "%.2f gb".format(bytes / 1_000_000_000.0)
-    bytes >= 1_000_000 -> "%.1f mb".format(bytes / 1_000_000.0)
-    bytes >= 1_000 -> "%.1f kb".format(bytes / 1_000.0)
-    else -> "$bytes b"
+// Utility functions
+private fun isValidUrl(url: String): Boolean {
+    return url.startsWith("http://") || url.startsWith("https://") ||
+           url.startsWith("ftp://") || url.startsWith("magnet:")
+}
+
+private fun extractDomain(url: String): String {
+    return try {
+        val cleaned = url.removePrefix("https://").removePrefix("http://").removePrefix("ftp://")
+        cleaned.substringBefore("/").substringBefore("?")
+    } catch (e: Exception) {
+        url
+    }
 }
