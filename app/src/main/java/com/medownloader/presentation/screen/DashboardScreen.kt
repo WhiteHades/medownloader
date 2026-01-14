@@ -1,87 +1,44 @@
 package com.medownloader.presentation.screen
+import com.medownloader.util.formatEta
+import com.medownloader.util.formatSize
+import com.medownloader.util.formatSpeed
+import androidx.compose.ui.res.stringResource
 
 import android.view.HapticFeedbackConstants
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PriorityHigh
-import androidx.compose.material.icons.outlined.CloudDownload
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Speed
-import androidx.compose.material3.Badge
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.medownloader.R
 import com.medownloader.data.model.Download
 import com.medownloader.data.model.DownloadStatus
 import com.medownloader.presentation.MainUiState
-import com.medownloader.ui.theme.CardShape
-import com.medownloader.ui.theme.ExpressiveMotion
-import com.medownloader.ui.theme.MonoTextStyle
-import com.medownloader.ui.theme.Shapes
-import com.medownloader.ui.theme.rememberFloatingAnimation
-import kotlin.math.roundToInt
+import com.medownloader.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DashboardScreen(
     uiState: MainUiState,
@@ -91,72 +48,29 @@ fun DashboardScreen(
     onResumeClick: (String) -> Unit,
     onRemoveClick: (String) -> Unit,
     onSettingsClick: () -> Unit,
+    onStatsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
-
+    
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "meDownloader",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (uiState.globalStats != null) {
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = "↓ ${formatSpeed(uiState.globalStats.totalDownloadSpeed)}",
-                                style = MonoTextStyle,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    if (isPremium) {
-                        Badge(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Text("pro", modifier = Modifier.padding(horizontal = 4.dp))
-                        }
-                    }
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "settings")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            ExpressiveTopBar(
+                totalSpeed = uiState.globalStats?.totalDownloadSpeed ?: 0L,
+                isPremium = isPremium,
+                onSettingsClick = onSettingsClick,
+                onStatsClick = onStatsClick
             )
         },
         floatingActionButton = {
-            val interactionSource = remember { MutableInteractionSource() }
-            val isPressed by interactionSource.collectIsPressedAsState()
-            val scale by animateFloatAsState(
-                targetValue = if (isPressed) 0.94f else 1f,
-                animationSpec = ExpressiveMotion.QuickSnap,
-                label = "fab"
-            )
-
-            ExtendedFloatingActionButton(
+            ExpressiveFab(
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                     onAddClick()
-                },
-                modifier = Modifier.scale(scale),
-                interactionSource = interactionSource,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                icon = { Icon(Icons.Default.Add, "add", modifier = Modifier.size(22.dp)) },
-                text = { Text("new download", fontWeight = FontWeight.SemiBold) }
+                }
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         if (uiState.downloads.isEmpty()) {
             EmptyState(modifier = Modifier.padding(padding))
@@ -165,145 +79,509 @@ fun DashboardScreen(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Quick Stats Bar
                 item {
-                    StatsBar(
+                    QuickStatsRow(
                         activeCount = uiState.activeDownloads.size,
                         completedCount = uiState.completedDownloads.size,
                         totalSpeed = uiState.globalStats?.totalDownloadSpeed ?: 0L
                     )
                 }
-
+                
                 if (uiState.activeDownloads.isNotEmpty()) {
-                    item { SectionHeader("active") }
-                    itemsIndexed(uiState.activeDownloads, key = { _, d -> d.gid }) { i, download ->
+                    item {
+                        SectionHeader(
+                            title = stringResource(R.string.dashboard_active),
+                            count = uiState.activeDownloads.size,
+                            icon = Icons.Outlined.CloudDownload
+                        )
+                    }
+                    itemsIndexed(
+                        uiState.activeDownloads,
+                        key = { _, d -> d.gid }
+                    ) { index, download ->
                         AnimatedVisibility(
                             visible = true,
-                            enter = fadeIn(tween(150, delayMillis = i * 30)) +
-                                    slideInVertically(tween(150, delayMillis = i * 30)) { it / 3 }
+                            enter = fadeIn(tween(200, delayMillis = index * 50)) +
+                                    slideInVertically(
+                                        animationSpec = spring(
+                                            dampingRatio = 0.7f,
+                                            stiffness = 500f
+                                        ),
+                                        initialOffsetY = { it / 2 }
+                                    )
                         ) {
-                            DownloadCard(download, true, onPauseClick, onResumeClick, onRemoveClick)
+                            ExpressiveDownloadCard(
+                                download = download,
+                                isActive = true,
+                                onPauseClick = { onPauseClick(download.gid) },
+                                onResumeClick = { onResumeClick(download.gid) },
+                                onRemoveClick = { onRemoveClick(download.gid) }
+                            )
                         }
                     }
                 }
-
+                
                 if (uiState.completedDownloads.isNotEmpty()) {
-                    item { SectionHeader("completed") }
-                    itemsIndexed(uiState.completedDownloads, key = { _, d -> d.gid }) { i, download ->
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        SectionHeader(
+                            title = stringResource(R.string.dashboard_completed),
+                            count = uiState.completedDownloads.size,
+                            icon = Icons.Outlined.CheckCircle
+                        )
+                    }
+                    itemsIndexed(
+                        uiState.completedDownloads,
+                        key = { _, d -> d.gid }
+                    ) { index, download ->
                         AnimatedVisibility(
                             visible = true,
-                            enter = fadeIn(tween(150, delayMillis = i * 30))
+                            enter = fadeIn(tween(150, delayMillis = index * 30))
                         ) {
-                            DownloadCard(download, false, onPauseClick, onResumeClick, onRemoveClick)
+                            ExpressiveDownloadCard(
+                                download = download,
+                                isActive = false,
+                                onPauseClick = { },
+                                onResumeClick = { },
+                                onRemoveClick = { onRemoveClick(download.gid) }
+                            )
                         }
                     }
                 }
+                
+                // Bottom spacing for FAB
+                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatsBar(activeCount: Int, completedCount: Int, totalSpeed: Long, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        shape = CardShape
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            StatItem(Icons.Outlined.CloudDownload, activeCount.toString(), "active", MaterialTheme.colorScheme.primary)
-            StatItem(Icons.Default.Check, completedCount.toString(), "done", MaterialTheme.colorScheme.tertiary)
-            StatItem(Icons.Outlined.Speed, formatSpeed(totalSpeed), "speed", MaterialTheme.colorScheme.secondary)
-        }
-    }
-}
-
-@Composable
-fun StatItem(icon: ImageVector, value: String, label: String, color: Color, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = color, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.height(2.dp))
-        Text(value, style = MonoTextStyle, fontWeight = FontWeight.Bold)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-fun SectionHeader(title: String, modifier: Modifier = Modifier) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(start = 4.dp, top = 6.dp, bottom = 2.dp)
+private fun ExpressiveTopBar(
+    totalSpeed: Long,
+    isPremium: Boolean,
+    onSettingsClick: () -> Unit,
+    onStatsClick: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                if (totalSpeed > 0) {
+                    SpeedChip(speed = totalSpeed)
+                }
+            }
+        },
+        actions = {
+            if (isPremium) {
+                ProBadge()
+            }
+            IconButton(onClick = onStatsClick) {
+                Icon(
+                    Icons.Outlined.Analytics,
+                    contentDescription = stringResource(R.string.dashboard_stats_content_desc),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onSettingsClick) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = stringResource(R.string.dashboard_settings_content_desc),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     )
 }
 
 @Composable
-fun DownloadCard(
+private fun SpeedChip(speed: Long) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = ExpressiveShapeTokens.Full,
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                Icons.Filled.ArrowDownward,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = formatSpeed(speed),
+                style = MonoTextStyleSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProBadge() {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = ExpressiveShapeTokens.Full
+    ) {
+        Text(
+            text = stringResource(R.string.settings_pro_badge),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onTertiaryContainer
+        )
+    }
+}
+
+@Composable
+private fun ExpressiveFab(onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    // Physics-based bounce animation
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = ExpressiveMotion.Bouncy,
+        label = "fabScale"
+    )
+    
+    val floatOffset = rememberFloatingAnimation()
+    
+    LargeFloatingActionButton(
+        onClick = onClick,
+        modifier = Modifier
+            .scale(scale)
+            .offset(y = (-floatOffset).dp),
+        interactionSource = interactionSource,
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        shape = ExpressiveShapeTokens.Full
+    ) {
+        Icon(
+            Icons.Filled.Add,
+            contentDescription = stringResource(R.string.dashboard_add_content_desc),
+            modifier = Modifier.size(28.dp)
+        )
+    }
+}
+
+@Composable
+private fun QuickStatsRow(
+    activeCount: Int,
+    completedCount: Int,
+    totalSpeed: Long
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        StatMiniCard(
+            icon = Icons.Outlined.CloudDownload,
+            value = activeCount.toString(),
+            label = stringResource(R.string.dashboard_active),
+            modifier = Modifier.weight(1f),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        StatMiniCard(
+            icon = Icons.Outlined.CheckCircle,
+            value = completedCount.toString(),
+            label = stringResource(R.string.dashboard_done),
+            modifier = Modifier.weight(1f),
+            containerColor = SuccessGreen90,
+            contentColor = SuccessGreen30
+        )
+        StatMiniCard(
+            icon = Icons.Outlined.Speed,
+            value = formatSpeed(totalSpeed),
+            label = stringResource(R.string.dashboard_speed),
+            modifier = Modifier.weight(1f),
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            useMono = true
+        )
+    }
+}
+
+@Composable
+private fun StatMiniCard(
+    icon: ImageVector,
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+    useMono: Boolean = false
+) {
+    Surface(
+        modifier = modifier,
+        color = containerColor,
+        shape = ExpressiveShapeTokens.StatsCard,
+        tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = contentColor
+            )
+            Text(
+                text = value,
+                style = if (useMono) MonoTextStyle else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = contentColor
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    count: Int,
+    icon: ImageVector
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = CircleShape
+        ) {
+            Text(
+                text = count.toString(),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpressiveDownloadCard(
     download: Download,
     isActive: Boolean,
-    onPauseClick: (String) -> Unit,
-    onResumeClick: (String) -> Unit,
-    onRemoveClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    onPauseClick: () -> Unit,
+    onResumeClick: () -> Unit,
+    onRemoveClick: () -> Unit
 ) {
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(download.progress) {
-        progress.animateTo(download.progress, spring(dampingRatio = 0.7f, stiffness = 400f))
-    }
-
+    val view = LocalView.current
+    
+    // Pulse animation for active downloads
+    val pulseScale = if (isActive && download.downloadSpeed > 0) {
+        rememberPulseAnimation()
+    } else 1f
+    
     Card(
-        modifier = modifier.fillMaxWidth().animateContentSize(),
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(pulseScale),
+        shape = ExpressiveShapeTokens.CardBold,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isActive)
+                MaterialTheme.colorScheme.surfaceContainer
+            else
+                MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isActive) 2.dp else 0.dp
+        )
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    StatusIcon(download.status)
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        Text(download.filename, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (isActive) Text("${download.connections} connections", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // File type icon
+                FileTypeIcon(filename = download.filename, status = download.status)
+                
+                // Filename and status
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = download.filename,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = getStatusText(download),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // Action buttons
+                if (isActive) {
+                    ActionButton(
+                        icon = if (download.isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            if (download.isPaused) onResumeClick() else onPauseClick()
+                        },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            
+            // Progress section for active downloads
+            if (isActive && !download.isComplete) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Progress bar with expressive rounded caps
+                    LinearProgressIndicator(
+                        progress = { download.progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(ExpressiveShapeTokens.ProgressTrack),
+                        color = when (download.status) {
+                            DownloadStatus.PAUSED -> MaterialTheme.colorScheme.outline
+                            DownloadStatus.ERROR -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.primary
+                        },
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        strokeCap = StrokeCap.Round
+                    )
+                    
+                    // Stats row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Speed
+                        if (download.downloadSpeed > 0) {
+                            Text(
+                                text = formatSpeed(download.downloadSpeed),
+                                style = MonoTextStyleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        } else {
+                            Text(
+                                text = if (download.isPaused) stringResource(R.string.status_paused) else stringResource(R.string.status_starting),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        // Progress %
+                        Text(
+                            text = "${download.progressPercent}%",
+                            style = MonoTextStyleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                        
+                        // Size
+                        Text(
+                            text = "${formatSize(download.completedLength)} / ${formatSize(download.totalLength)}",
+                            style = MonoTextStyleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
             
-            Spacer(Modifier.height(10.dp))
-            
-            Box(Modifier.fillMaxWidth().height(5.dp).clip(Shapes.extraSmall).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
-                Box(Modifier.fillMaxWidth(progress.value).height(5.dp).clip(Shapes.extraSmall).background(
-                    Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary))
-                ))
-            }
-            
-            Spacer(Modifier.height(6.dp))
-            
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                if (isActive) Text(formatSpeed(download.downloadSpeed), style = MonoTextStyle, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                else Text(if (download.isComplete) "complete" else "paused", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${formatBytes(download.completedLength)} / ${formatBytes(download.totalLength)}", style = MonoTextStyle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-            }
-
-            if (!download.isComplete) {
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    OutlinedButton(onClick = { onRemoveClick(download.gid) }, contentPadding = PaddingValues(horizontal = 14.dp), shape = Shapes.small) { Text("cancel") }
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = { if (download.isActive) onPauseClick(download.gid) else onResumeClick(download.gid) },
-                        contentPadding = PaddingValues(horizontal = 14.dp),
-                        shape = Shapes.small,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (download.isActive) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer)
+            // Completed state
+            if (download.isComplete) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(if (download.isActive) Icons.Default.Pause else Icons.Default.PlayArrow, null, Modifier.size(16.dp), tint = if (download.isActive) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer)
-                        Spacer(Modifier.width(4.dp))
-                        Text(if (download.isActive) "pause" else "resume", color = if (download.isActive) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer)
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = SuccessGreen40
+                        )
+                        Text(
+                            text = formatSize(download.totalLength),
+                            style = MonoTextStyleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalIconButton(
+                            onClick = { /* Open file */ },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.FolderOpen,
+                                contentDescription = stringResource(R.string.dashboard_open_content_desc),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        FilledTonalIconButton(
+                            onClick = onRemoveClick,
+                            modifier = Modifier.size(32.dp),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Icon(
+                                Icons.Outlined.Delete,
+                                contentDescription = stringResource(R.string.dashboard_remove_content_desc),
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
@@ -312,44 +590,170 @@ fun DownloadCard(
 }
 
 @Composable
-fun StatusIcon(status: DownloadStatus, modifier: Modifier = Modifier) {
-    val (bg, icon, tint) = when (status) {
-        DownloadStatus.COMPLETE -> Triple(MaterialTheme.colorScheme.primaryContainer, Icons.Default.Check, MaterialTheme.colorScheme.onPrimaryContainer)
-        DownloadStatus.ERROR -> Triple(MaterialTheme.colorScheme.errorContainer, Icons.Default.PriorityHigh, MaterialTheme.colorScheme.onErrorContainer)
-        DownloadStatus.PAUSED -> Triple(MaterialTheme.colorScheme.surfaceContainerHigh, Icons.Default.Pause, MaterialTheme.colorScheme.onSurfaceVariant)
-        else -> Triple(MaterialTheme.colorScheme.surfaceContainerHigh, Icons.Default.ArrowDownward, MaterialTheme.colorScheme.onSurfaceVariant)
+private fun FileTypeIcon(filename: String, status: DownloadStatus) {
+    val (icon, containerColor, contentColor) = when {
+        status == DownloadStatus.ERROR -> Triple(
+            Icons.Filled.ErrorOutline,
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.error
+        )
+        filename.endsWith(".zip") || filename.endsWith(".rar") || filename.endsWith(".7z") -> Triple(
+            Icons.Outlined.FolderZip,
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer
+        )
+        filename.endsWith(".mp4") || filename.endsWith(".mkv") || filename.endsWith(".avi") -> Triple(
+            Icons.Outlined.VideoFile,
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer
+        )
+        filename.endsWith(".mp3") || filename.endsWith(".flac") || filename.endsWith(".wav") -> Triple(
+            Icons.Outlined.AudioFile,
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer
+        )
+        filename.endsWith(".pdf") -> Triple(
+            Icons.Outlined.PictureAsPdf,
+            ErrorRed90,
+            ErrorRed40
+        )
+        filename.endsWith(".apk") || filename.endsWith(".exe") -> Triple(
+            Icons.Outlined.InstallMobile,
+            SuccessGreen90,
+            SuccessGreen40
+        )
+        filename.endsWith(".iso") || filename.endsWith(".img") -> Triple(
+            Icons.Outlined.Album,
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        else -> Triple(
+            Icons.Outlined.InsertDriveFile,
+            MaterialTheme.colorScheme.surfaceContainerHigh,
+            MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
-    Box(modifier.size(36.dp).clip(Shapes.small).background(bg), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(18.dp))
+    
+    Surface(
+        color = containerColor,
+        shape = ExpressiveShapes.medium
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.padding(10.dp),
+            tint = contentColor
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun EmptyState(modifier: Modifier = Modifier) {
-    val floatOffset = rememberFloatingAnimation()
-    Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+private fun ActionButton(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = ExpressiveMotion.MicroBounce,
+        label = "actionScale"
+    )
+    
+    FilledIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(40.dp).scale(scale),
+        interactionSource = interactionSource,
+        // M3 Expressive: Use shapes parameter for morphing shape support
+        shapes = IconButtonDefaults.shapes(),
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        )
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun EmptyState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Slow-animating progress for gentle morphing effect
+        val infiniteTransition = rememberInfiniteTransition(label = "slowMorph")
+        val slowProgress by infiniteTransition.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 0.9f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 4000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "progress"
+        )
+        
+        val floatOffset = rememberFloatingAnimation(targetValue = 12f, durationMillis = 4000)
+        
         Box(
-            Modifier.offset { IntOffset(0, floatOffset.roundToInt()) }.size(100.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, Shapes.extraLarge),
+            modifier = Modifier
+                .size(120.dp)
+                .offset(y = (-floatOffset).dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.CloudDownload, null, Modifier.size(50.dp), MaterialTheme.colorScheme.primary)
+            // M3E CircularWavyProgressIndicator with slow animation
+            CircularWavyProgressIndicator(
+                progress = { slowProgress },
+                modifier = Modifier.size(100.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            )
+            
+            // Icon overlay
+            Icon(
+                Icons.Outlined.CloudDownload,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
-        Spacer(Modifier.height(20.dp))
-        Text("no downloads yet", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        Text("tap + to add a download\nor share a link from your browser", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Text(
+            text = stringResource(R.string.dashboard_empty_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = stringResource(R.string.dashboard_empty_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
-private fun formatSpeed(bytesPerSecond: Long) = when {
-    bytesPerSecond >= 1_000_000 -> "%.1f mb/s".format(bytesPerSecond / 1_000_000.0)
-    bytesPerSecond >= 1_000 -> "%.1f kb/s".format(bytesPerSecond / 1_000.0)
-    else -> "$bytesPerSecond b/s"
+@Composable
+private fun getStatusText(download: Download): String {
+    return when (download.status) {
+        DownloadStatus.ACTIVE -> if (download.downloadSpeed > 0) {
+            "ETA: ${formatEta(download.etaSeconds)}"
+        } else stringResource(R.string.status_connecting)
+        DownloadStatus.PAUSED -> stringResource(R.string.status_paused)
+        DownloadStatus.WAITING -> stringResource(R.string.status_waiting)
+        DownloadStatus.COMPLETE -> stringResource(R.string.status_completed)
+        DownloadStatus.ERROR -> download.errorMessage ?: stringResource(R.string.status_error)
+        DownloadStatus.REMOVED -> stringResource(R.string.status_removed)
+    }
 }
 
-private fun formatBytes(bytes: Long) = when {
-    bytes >= 1_000_000_000 -> "%.2f gb".format(bytes / 1_000_000_000.0)
-    bytes >= 1_000_000 -> "%.1f mb".format(bytes / 1_000_000.0)
-    bytes >= 1_000 -> "%.1f kb".format(bytes / 1_000.0)
-    else -> "$bytes b"
-}
