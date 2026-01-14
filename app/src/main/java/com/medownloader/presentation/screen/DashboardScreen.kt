@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -265,17 +266,13 @@ private fun ExpressiveFab(onClick: () -> Unit) {
         label = "fabScale"
     )
     
-    val floatOffset = rememberFloatingAnimation()
-    
     LargeFloatingActionButton(
         onClick = onClick,
-        modifier = Modifier
-            .scale(scale)
-            .offset(y = (-floatOffset).dp),
+        modifier = Modifier.scale(scale),
         interactionSource = interactionSource,
         containerColor = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        shape = ExpressiveShapeTokens.Full
+        shape = ExpressiveShapeTokens.FabBlob
     ) {
         Icon(
             Icons.Filled.Add,
@@ -404,6 +401,7 @@ private fun SectionHeader(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ExpressiveDownloadCard(
     download: Download,
@@ -420,10 +418,8 @@ private fun ExpressiveDownloadCard(
     } else 1f
     
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(pulseScale),
-        shape = ExpressiveShapeTokens.CardBold,
+        modifier = Modifier.fillMaxWidth(),
+        shape = ExpressiveShapeTokens.CardTilted,
         colors = CardDefaults.cardColors(
             containerColor = if (isActive)
                 MaterialTheme.colorScheme.surfaceContainer
@@ -479,20 +475,18 @@ private fun ExpressiveDownloadCard(
             // Progress section for active downloads
             if (isActive && !download.isComplete) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Progress bar with expressive rounded caps
-                    LinearProgressIndicator(
+                    // wavy progress bar
+                    LinearWavyProgressIndicator(
                         progress = { download.progress },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(ExpressiveShapeTokens.ProgressTrack),
+                            .height(6.dp),
                         color = when (download.status) {
                             DownloadStatus.PAUSED -> MaterialTheme.colorScheme.outline
                             DownloadStatus.ERROR -> MaterialTheme.colorScheme.error
                             else -> MaterialTheme.colorScheme.primary
                         },
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        strokeCap = StrokeCap.Round
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                     )
                     
                     // Stats row

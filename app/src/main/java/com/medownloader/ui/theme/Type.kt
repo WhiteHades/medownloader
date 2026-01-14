@@ -8,25 +8,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.medownloader.R
 
-/**
- * Material 3 Expressive Typography System
- * 
- * Variable fonts with expression.
- * Bold geometric headings, clear body text.
- * Monospaced for data (speeds, sizes, timestamps).
- */
-
-// System fonts (or use Google Fonts if bundled)
 val DefaultFontFamily = FontFamily.Default
 
-// Monospace for data visualization (speeds, sizes)
-val MonoFontFamily = FontFamily.Monospace
+val JetBrainsMonoFamily = FontFamily(
+    Font(R.font.jetbrains_mono_regular, FontWeight.Normal),
+    Font(R.font.jetbrains_mono_medium, FontWeight.Medium),
+    Font(R.font.jetbrains_mono_semibold, FontWeight.SemiBold),
+    Font(R.font.jetbrains_mono_bold, FontWeight.Bold)
+)
 
-/**
- * Expressive Typography Scale
- */
+val MonoFontFamily = JetBrainsMonoFamily
+
 val ExpressiveTypography = Typography(
-    // Display - Hero sections, large headers
     displayLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.Bold,
@@ -48,8 +41,6 @@ val ExpressiveTypography = Typography(
         lineHeight = 44.sp,
         letterSpacing = 0.sp
     ),
-    
-    // Headline - Page titles, section headers
     headlineLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.Bold,
@@ -71,8 +62,6 @@ val ExpressiveTypography = Typography(
         lineHeight = 32.sp,
         letterSpacing = 0.sp
     ),
-    
-    // Title - App bar, card titles
     titleLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.Bold,
@@ -94,8 +83,6 @@ val ExpressiveTypography = Typography(
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp
     ),
-    
-    // Body - Main content
     bodyLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.Normal,
@@ -117,8 +104,6 @@ val ExpressiveTypography = Typography(
         lineHeight = 16.sp,
         letterSpacing = 0.4.sp
     ),
-    
-    // Label - Buttons, chips, badges
     labelLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.SemiBold,
@@ -142,9 +127,6 @@ val ExpressiveTypography = Typography(
     )
 )
 
-/**
- * Monospace text style for data (speeds, sizes, timestamps)
- */
 val MonoTextStyle = TextStyle(
     fontFamily = MonoFontFamily,
     fontWeight = FontWeight.Medium,

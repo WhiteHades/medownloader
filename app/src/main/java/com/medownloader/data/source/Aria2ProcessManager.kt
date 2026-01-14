@@ -6,17 +6,15 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
 
-/**
- * Manages the aria2c native process lifecycle.
- * 
- * Responsibilities:
- * - Start/stop the aria2c daemon process
- * - Monitor process health (watchdog)
- * - Auto-restart on crash
- * - Graceful shutdown
- */
 class Aria2ProcessManager(private val context: Context) {
 
     companion object {
@@ -27,10 +25,12 @@ class Aria2ProcessManager(private val context: Context) {
         private const val MAX_RESTART_ATTEMPTS = 3
     }
 
+    @Volatile
     private var aria2Process: Process? = null
     private var watchdogJob: Job? = null
     private var restartCount = 0
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val startMutex = Mutex()
 
     private val _processState = MutableStateFlow<ProcessState>(ProcessState.Stopped)
     val processState: StateFlow<ProcessState> = _processState.asStateFlow()
@@ -42,113 +42,136 @@ class Aria2ProcessManager(private val context: Context) {
         data class Error(val message: String) : ProcessState()
     }
 
-    /**
-     * Starts the aria2c daemon process with RPC enabled.
-     */
-    suspend fun start(): Result<Unit> = withContext(Dispatchers.IO) {
-        if (_processState.value == ProcessState.Running) {
-            return@withContext Result.success(Unit)
-        }
+    suspend fun start(): Result<Unit> = startMutex.withLock {
+        withContext(Dispatchers.IO) {
+            if (isRpcResponding()) {
+                Log.d(TAG, "RPC is already responding, skipping start")
+                _processState.value = ProcessState.Running
+                return@withContext Result.success(Unit)
+            }
 
-        _processState.value = ProcessState.Starting
+            if (_processState.value == ProcessState.Running && aria2Process?.isAlive == true) {
+                Log.d(TAG, "Process already running, skipping start")
+                return@withContext Result.success(Unit)
+            }
+
+            _processState.value = ProcessState.Starting
 
         try {
             val binaryPath = extractAria2Binary()
-            val sessionFile = File(context.filesDir, "aria2.session")
-            val downloadDir = File(context.filesDir, "downloads")
+            val publicDownloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS
+            )
+            val downloadDir = File(publicDownloadsDir, "meDownloader")
             downloadDir.mkdirs()
-            
-            // Create session file if it doesn't exist (required for --input-file)
+            val sessionFile = File(downloadDir, ".aria2session")
+            val caCertPath = copyCaCertificate()
+
             if (!sessionFile.exists()) {
                 sessionFile.createNewFile()
                 Log.d(TAG, "Created new session file: ${sessionFile.absolutePath}")
             }
 
+            val serverStatFile = File(downloadDir, ".aria2-server-stats")
+            val userAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+
             val command = mutableListOf(
                 binaryPath,
-                // RPC Options (from docs: RPC Options section)
                 "--enable-rpc=true",
                 "--rpc-listen-port=$RPC_PORT",
-                "--rpc-listen-all=false",           // Security: only localhost
+                "--rpc-listen-all=false",
                 "--rpc-secret=$RPC_SECRET",
-                "--rpc-allow-origin-all=false",     // Security: no CORS
-                "--rpc-save-upload-metadata=true",  // Save .torrent/.metalink files
-                "--rpc-max-request-size=2M",        // Default from docs
-                
-                // Basic Options (from docs: Basic Options section)
+                "--rpc-allow-origin-all=false",
+                "--rpc-save-upload-metadata=true",
+                "--rpc-max-request-size=2M",
+                "--ca-certificate=$caCertPath",
+                "--check-certificate=true",
+                "--min-tls-version=TLSv1.2",
                 "--dir=${downloadDir.absolutePath}",
                 "--input-file=${sessionFile.absolutePath}",
                 "--save-session=${sessionFile.absolutePath}",
-                "--save-session-interval=30",
-                "--max-concurrent-downloads=3",     // Free tier (docs: -j option)
-                
-                // HTTP/FTP/SFTP Options (from docs)
-                "--max-connection-per-server=8",    // Free tier (docs: -x option, default 1)
-                "--split=8",                        // Free tier (docs: -s option, default 5)
-                "--min-split-size=1M",              // Docs: default 20M, we use 1M for mobile
-                "--max-tries=5",                    // Docs: -m option, default 5
-                "--retry-wait=3",                   // Wait 3 seconds between retries
-                "--connect-timeout=60",             // Docs: default 60
-                "--timeout=60",                     // Docs: default 60
-                "--lowest-speed-limit=0",           // Docs: 0 means disabled
-                "--max-file-not-found=5",           // Fail after 5 "file not found"
-                "--continue=true",                  // Docs: -c option for resume
-                "--auto-file-renaming=true",        // Docs: rename if file exists
-                "--allow-overwrite=false",          // Docs: don't overwrite by default
-                "--remote-time=true",               // Docs: -R option, apply server timestamp
-                "--uri-selector=feedback",          // Docs: use download speed feedback
-                "--stream-piece-selector=default",  // Docs: reduce connections
-                
-                // HTTP Specific (from docs: HTTP Specific Options section)
-                "--http-accept-gzip=true",          // Accept gzip compression
-                "--enable-http-keep-alive=true",    // Docs: default true
-                "--enable-http-pipelining=false",   // Docs: usually no performance gain
-                "--user-agent=meDownloader/1.0",    // Custom UA
-                
-                // Advanced Options (from docs: Advanced Options section)
-                "--file-allocation=prealloc",       // Docs: pre-allocate for space check
-                "--disk-cache=16M",                 // Docs: default 16M, reduces disk I/O
-                "--async-dns=true",                 // Docs: default true
-                "--auto-save-interval=60",          // Docs: save control file every 60s
-                "--console-log-level=notice",       // Docs: default notice
-                "--log=${context.filesDir}/aria2.log",
-                "--log-level=notice",               // Docs: default debug, we use notice
-                "--download-result=full",           // Docs: show full result info
-                "--max-download-result=100",        // Keep 100 results in memory
-                "--keep-unfinished-download-result=true",
-                "--human-readable=true",            // Docs: format sizes nicely
-                
-                // TLS Options (from docs: Advanced Options section)
-                "--min-tls-version=TLSv1.2",        // Docs: default TLSv1.2
-                "--check-certificate=true",         // Docs: verify SSL certs
-                
-                // Daemon mode (we manage the process ourselves)
-                "--daemon=false",                   // Docs: don't daemonize
-                "--enable-color=false",             // No color codes in log
-                "--show-console-readout=false",     // No console output
-                
-                // Piece/Chunk options
-                "--piece-length=1M",                // Docs: HTTP/FTP chunk size
-                "--realtime-chunk-checksum=true"    // Docs: validate during download
+                "--save-session-interval=60",
+                "--force-save=true",
+                "--auto-save-interval=60",
+                "--max-concurrent-downloads=5",
+                "--max-connection-per-server=4",
+                "--split=8",
+                "--min-split-size=5M",
+                "--continue=true",
+                "--always-resume=true",
+                "--max-tries=0",
+                "--retry-wait=20",
+                "--connect-timeout=60",
+                "--timeout=60",
+                "--lowest-speed-limit=0",
+                "--user-agent=$userAgent",
+                "--enable-http-keep-alive=true",
+                "--http-accept-gzip=false",
+                "--uri-selector=feedback",
+                "--server-stat-of=${serverStatFile.absolutePath}",
+                "--server-stat-if=${serverStatFile.absolutePath}",
+                "--server-stat-timeout=86400",
+                "--file-allocation=falloc",
+                "--disk-cache=32M",
+                "--auto-file-renaming=true",
+                "--allow-overwrite=false",
+                "--remote-time=true",
+                "--conditional-get=true",
+                "--enable-dht=true",
+                "--enable-dht6=true",
+                "--dht-file-path=${File(downloadDir, ".aria2-dht.dat").absolutePath}",
+                "--dht-file-path6=${File(downloadDir, ".aria2-dht6.dat").absolutePath}",
+                "--enable-peer-exchange=true",
+                "--bt-enable-lpd=true",
+                "--bt-max-peers=55",
+                "--bt-save-metadata=true",
+                "--bt-load-saved-metadata=true",
+                "--seed-ratio=1.0",
+                "--bt-hash-check-seed=true",
+                "--follow-torrent=true",
+                "--follow-metalink=true",
+                "--async-dns=true",
+                "--async-dns-server=8.8.8.8,8.8.4.4,1.1.1.1",
+                "--console-log-level=notice",
+                "--log-level=notice",
+                "--daemon=false",
+                "--enable-color=false",
+                "--show-console-readout=false",
+                "--summary-interval=0"
             )
+
+            Log.d(TAG, "Starting aria2c: ${command.joinToString(" ")}")
 
             val processBuilder = ProcessBuilder(command)
                 .directory(context.filesDir)
                 .redirectErrorStream(true)
 
-            aria2Process = processBuilder.start()
+            val process = processBuilder.start()
+            aria2Process = process
             
-            // Wait a bit and verify it started
+            thread(name = "Aria2Logger") {
+                try {
+                    process.inputStream.bufferedReader().use { reader ->
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null) {
+                            Log.i("Aria2Native", line ?: "")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error reading process output", e)
+                }
+            }
+            
             delay(500)
             
-            if (aria2Process?.isAlive == true) {
+            if (process.isAlive) {
                 _processState.value = ProcessState.Running
                 restartCount = 0
                 startWatchdog()
                 Log.i(TAG, "aria2c started successfully on port $RPC_PORT")
                 Result.success(Unit)
             } else {
-                val exitCode = aria2Process?.exitValue() ?: -1
+                val exitCode = process.exitValue()
                 val error = "aria2c failed to start (exit code: $exitCode)"
                 _processState.value = ProcessState.Error(error)
                 Log.e(TAG, error)
@@ -159,21 +182,66 @@ class Aria2ProcessManager(private val context: Context) {
             Log.e(TAG, "Failed to start aria2c", e)
             Result.failure(e)
         }
+        }
     }
 
-    /**
-     * Gracefully stops the aria2c process.
-     */
+    private fun copyCaCertificate(): String {
+        val caFile = File(context.filesDir, "cacert.pem")
+        if (!caFile.exists()) {
+            try {
+                context.assets.open("cacert.pem").use { input ->
+                    FileOutputStream(caFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.i(TAG, "Copied cacert.pem to internal storage")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to copy cacert.pem", e)
+            }
+        }
+        return caFile.absolutePath
+    }
+
+    private fun isRpcResponding(): Boolean {
+        try {
+            java.net.Socket().use { socket ->
+                socket.connect(java.net.InetSocketAddress("127.0.0.1", RPC_PORT), 1000)
+            }
+            Log.d(TAG, "isRpcResponding: Socket connect succeeded, port 6800 is in use")
+        } catch (e: Exception) {
+            Log.d(TAG, "isRpcResponding: Socket connect failed (port likely free): ${e.message}")
+            return false
+        }
+
+        return try {
+            val url = URL("http://127.0.0.1:$RPC_PORT/jsonrpc")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = 2000
+            connection.readTimeout = 2000
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.outputStream.use { os ->
+                os.write("""{"jsonrpc":"2.0","id":"ping","method":"aria2.getVersion","params":["token:$RPC_SECRET"]}""".toByteArray())
+            }
+            val responseCode = connection.responseCode
+            connection.disconnect()
+            val isResponding = responseCode == 200
+            Log.d(TAG, "isRpcResponding: RPC call returned $responseCode, isResponding=$isResponding")
+            isResponding
+        } catch (e: Exception) {
+            Log.w(TAG, "isRpcResponding: RPC call failed: ${e.message}")
+            true
+        }
+    }
+
     suspend fun stop() = withContext(Dispatchers.IO) {
         watchdogJob?.cancel()
         watchdogJob = null
 
         aria2Process?.let { process ->
             try {
-                // Send shutdown via RPC first (graceful)
-                // aria2.shutdown via JSON-RPC would go here
-                
-                // Give it time to save session
+                saveSessionViaRpc()
                 delay(1000)
                 
                 if (process.isAlive) {
@@ -194,30 +262,46 @@ class Aria2ProcessManager(private val context: Context) {
         Log.i(TAG, "aria2c stopped")
     }
 
+    private fun saveSessionViaRpc() {
+        try {
+            val url = URL("http://127.0.0.1:$RPC_PORT/jsonrpc")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 2000
+            connection.readTimeout = 2000
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json")
+            
+            val payload = """{"jsonrpc":"2.0","id":"save","method":"aria2.saveSession","params":["token:$RPC_SECRET"]}"""
+            connection.outputStream.use { it.write(payload.toByteArray()) }
+            
+            val responseCode = connection.responseCode
+            Log.d(TAG, "saveSession RPC response: $responseCode")
+            connection.disconnect()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save session via RPC: ${e.message}")
+        }
+    }
+
     private fun extractAria2Binary(): String {
         val binaryName = "libaria2c.so"
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val sourceDir = File(context.applicationInfo.sourceDir).parentFile
         
-        // android can use different ABI directory names, try all possibilities
         val abiVariants = listOf(
             android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a",
             "arm64-v8a", "arm64", "armeabi-v7a", "x86_64", "x86"
         ).distinct()
         
         val searchPaths = mutableListOf<File>()
-        
-        // primary: nativeLibraryDir (most common)
         searchPaths.add(File(nativeLibDir, binaryName))
         
-        // try ABI variants in lib subdirectory
         sourceDir?.let { base ->
             for (abi in abiVariants) {
                 searchPaths.add(File(base, "lib/$abi/$binaryName"))
             }
         }
         
-        // log all paths for debugging
         Log.d(TAG, "Searching for aria2c in: ${searchPaths.map { it.absolutePath }}")
         
         for (path in searchPaths) {
@@ -231,9 +315,6 @@ class Aria2ProcessManager(private val context: Context) {
         throw RuntimeException("aria2c binary not found in native library paths: ${searchPaths.map { it.absolutePath }}")
     }
 
-    /**
-     * Watchdog coroutine that monitors process health.
-     */
     private fun startWatchdog() {
         watchdogJob = scope.launch {
             while (isActive) {
@@ -258,21 +339,10 @@ class Aria2ProcessManager(private val context: Context) {
         }
     }
 
-    /**
-     * Get the RPC secret for client authentication.
-     */
     fun getRpcSecret(): String = RPC_SECRET
 
-    /**
-     * Get the RPC URL.
-     */
     fun getRpcUrl(): String = "http://localhost:$RPC_PORT/jsonrpc"
 
-    /**
-     * Update connection limits (for premium unlock).
-     */
     suspend fun updateLimits(maxConcurrent: Int, maxConnections: Int, split: Int) {
-        // This would call aria2.changeGlobalOption via RPC
-        // Implemented in Aria2RpcClient
     }
 }

@@ -26,6 +26,7 @@ import com.medownloader.presentation.screen.AddDownloadSheet
 import com.medownloader.presentation.screen.PaywallScreen
 import com.medownloader.presentation.screen.PaywallTriggerReason
 import com.medownloader.presentation.screen.SettingsScreen
+import com.medownloader.presentation.screen.StatsScreen
 import com.medownloader.service.DownloadService
 import com.medownloader.ui.theme.MeDownloaderTheme
 import kotlinx.coroutines.flow.collectLatest
@@ -97,7 +98,8 @@ class MainActivity : ComponentActivity() {
                                 onPauseClick = viewModel::pauseDownload,
                                 onResumeClick = viewModel::resumeDownload,
                                 onRemoveClick = viewModel::removeDownload,
-                                onSettingsClick = { navController.navigate("settings") }
+                                onSettingsClick = { navController.navigate("settings") },
+                                onStatsClick = { navController.navigate("stats") }
                             )
                         }
                         
@@ -130,6 +132,15 @@ class MainActivity : ComponentActivity() {
                                 onDownloadPathClick = { folderPickerLauncher.launch(null) },
                                 onBackClick = { navController.popBackStack() },
                                 onGetProClick = { navController.navigate("paywall/SETTINGS_UPGRADE") }
+                            )
+                        }
+                        
+                        composable("stats") {
+                            StatsScreen(
+                                downloads = uiState.downloads,
+                                totalDownloaded = uiState.downloads.sumOf { it.completedLength },
+                                averageSpeed = uiState.globalStats?.totalDownloadSpeed ?: 0L,
+                                onBackClick = { navController.popBackStack() }
                             )
                         }
                         
