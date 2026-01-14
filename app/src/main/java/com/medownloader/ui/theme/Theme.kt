@@ -1,8 +1,9 @@
 package com.medownloader.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -16,255 +17,322 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+/**
+ * App Theme Selection
+ */
 enum class AppTheme {
     DEFAULT,
     CATPPUCCIN,
-    GRUVBOX,
     TOKYO_NIGHT,
+    GRUVBOX,
     NORD
 }
 
+// ============================================================
+// DEFAULT THEME: Electric Blue + Cyber Violet + Neon Cyan
+// ============================================================
+
 private val DefaultLightScheme = lightColorScheme(
-    primary = Color(0xFF7C4DFF),
+    primary = ElectricBlue50,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE8DEF8),
-    onPrimaryContainer = Color(0xFF21005E),
-    inversePrimary = Color(0xFFD0BCFF),
-    secondary = Color(0xFFCE93D8),
-    onSecondary = Color(0xFF3D2845),
-    secondaryContainer = Color(0xFFF3E5F5),
-    onSecondaryContainer = Color(0xFF3D2845),
-    tertiary = Color(0xFF84FFFF),
-    onTertiary = Color(0xFF003737),
-    tertiaryContainer = Color(0xFFE0F7FA),
-    onTertiaryContainer = Color(0xFF003737),
-    error = Color(0xFFBA1A1A),
+    primaryContainer = ElectricBlue90,
+    onPrimaryContainer = ElectricBlue10,
+    inversePrimary = ElectricBlue80,
+    
+    secondary = CyberViolet50,
+    onSecondary = Color.White,
+    secondaryContainer = CyberViolet90,
+    onSecondaryContainer = CyberViolet10,
+    
+    tertiary = NeonCyan50,
+    onTertiary = Color.White,
+    tertiaryContainer = NeonCyan90,
+    onTertiaryContainer = NeonCyan10,
+    
+    error = ErrorRed40,
     onError = Color.White,
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFFFFBFE),
-    onBackground = Color(0xFF1C1B1F),
-    surface = Color(0xFFFFFBFE),
-    onSurface = Color(0xFF1C1B1F),
-    surfaceVariant = Color(0xFFE7E0EC),
-    onSurfaceVariant = Color(0xFF49454F),
-    surfaceTint = Color(0xFF7C4DFF),
-    inverseSurface = Color(0xFF313033),
-    inverseOnSurface = Color(0xFFF4EFF4),
-    outline = Color(0xFF79747E),
-    outlineVariant = Color(0xFFCAC4D0),
+    errorContainer = ErrorRed90,
+    onErrorContainer = ErrorRed10,
+    
+    background = Color(0xFFFDFBFF),
+    onBackground = Color(0xFF1A1C1E),
+    
+    surface = Color(0xFFFDFBFF),
+    onSurface = Color(0xFF1A1C1E),
+    surfaceVariant = Color(0xFFE1E2EC),
+    onSurfaceVariant = Color(0xFF44474F),
+    
+    surfaceTint = ElectricBlue50,
+    inverseSurface = Color(0xFF2F3033),
+    inverseOnSurface = Color(0xFFF1F0F4),
+    
+    outline = Color(0xFF74777F),
+    outlineVariant = Color(0xFFC4C6D0),
     scrim = Color.Black,
-    surfaceBright = Color(0xFFFFFBFE),
-    surfaceDim = Color(0xFFDED8DD),
-    surfaceContainer = Color(0xFFF3EDF2),
-    surfaceContainerHigh = Color(0xFFEDE7EC),
-    surfaceContainerHighest = Color(0xFFE7E1E6),
-    surfaceContainerLow = Color(0xFFF9F3F8),
+    
+    surfaceBright = Color(0xFFFDFBFF),
+    surfaceDim = Color(0xFFDCD9DE),
+    surfaceContainer = Color(0xFFF1EFF4),
+    surfaceContainerHigh = Color(0xFFEBE9EE),
+    surfaceContainerHighest = Color(0xFFE5E3E8),
+    surfaceContainerLow = Color(0xFFF7F5FA),
     surfaceContainerLowest = Color.White
 )
 
 private val DefaultDarkScheme = darkColorScheme(
-    primary = Color(0xFFD0BCFF),
-    onPrimary = Color(0xFF381E72),
-    primaryContainer = Color(0xFF4F378B),
-    onPrimaryContainer = Color(0xFFEADDFF),
-    inversePrimary = Color(0xFF7C4DFF),
-    secondary = Color(0xFFCCC2DC),
-    onSecondary = Color(0xFF332D41),
-    secondaryContainer = Color(0xFF4A4458),
-    onSecondaryContainer = Color(0xFFE8DEF8),
-    tertiary = Color(0xFF84FFFF),
-    onTertiary = Color(0xFF003737),
-    tertiaryContainer = Color(0xFF004F50),
-    onTertiaryContainer = Color(0xFFA7FFEB),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF1C1B1F),
-    onBackground = Color(0xFFE6E1E5),
-    surface = Color(0xFF1C1B1F),
-    onSurface = Color(0xFFE6E1E5),
-    surfaceVariant = Color(0xFF49454F),
-    onSurfaceVariant = Color(0xFFCAC4D0),
-    surfaceTint = Color(0xFFD0BCFF),
-    inverseSurface = Color(0xFFE6E1E5),
-    inverseOnSurface = Color(0xFF313033),
-    outline = Color(0xFF938F99),
-    outlineVariant = Color(0xFF49454F),
+    primary = ElectricBlue80,
+    onPrimary = ElectricBlue20,
+    primaryContainer = ElectricBlue30,
+    onPrimaryContainer = ElectricBlue90,
+    inversePrimary = ElectricBlue50,
+    
+    secondary = CyberViolet80,
+    onSecondary = CyberViolet20,
+    secondaryContainer = CyberViolet30,
+    onSecondaryContainer = CyberViolet90,
+    
+    tertiary = NeonCyan80,
+    onTertiary = NeonCyan20,
+    tertiaryContainer = NeonCyan30,
+    onTertiaryContainer = NeonCyan90,
+    
+    error = ErrorRed80,
+    onError = ErrorRed20,
+    errorContainer = ErrorRed30,
+    onErrorContainer = ErrorRed90,
+    
+    background = Color(0xFF111113),
+    onBackground = Color(0xFFE3E2E6),
+    
+    surface = Color(0xFF111113),
+    onSurface = Color(0xFFE3E2E6),
+    surfaceVariant = Color(0xFF44474F),
+    onSurfaceVariant = Color(0xFFC4C6D0),
+    
+    surfaceTint = ElectricBlue80,
+    inverseSurface = Color(0xFFE3E2E6),
+    inverseOnSurface = Color(0xFF2F3033),
+    
+    outline = Color(0xFF8E9099),
+    outlineVariant = Color(0xFF44474F),
     scrim = Color.Black,
-    surfaceBright = Color(0xFF3B383E),
-    surfaceDim = Color(0xFF1C1B1F),
-    surfaceContainer = Color(0xFF211F26),
-    surfaceContainerHigh = Color(0xFF2B2930),
-    surfaceContainerHighest = Color(0xFF36343B),
-    surfaceContainerLow = Color(0xFF1D1B20),
-    surfaceContainerLowest = Color(0xFF0F0D13)
+    
+    surfaceBright = Color(0xFF39393C),
+    surfaceDim = Color(0xFF111113),
+    surfaceContainer = Color(0xFF1D1D20),
+    surfaceContainerHigh = Color(0xFF27272A),
+    surfaceContainerHighest = Color(0xFF323235),
+    surfaceContainerLow = Color(0xFF1A1A1C),
+    surfaceContainerLowest = Color(0xFF0D0D0F)
 )
+
+// ============================================================
+// CATPPUCCIN MOCHA (Premium)
+// ============================================================
 
 private val CatppuccinDarkScheme = darkColorScheme(
-    primary = Color(0xFFF5C2E7),
-    onPrimary = Color(0xFF302D41),
-    primaryContainer = Color(0xFF575268),
-    onPrimaryContainer = Color(0xFFFAE3FF),
-    secondary = Color(0xFFABE9B3),
-    onSecondary = Color(0xFF302D41),
-    secondaryContainer = Color(0xFF4D5A56),
-    onSecondaryContainer = Color(0xFFD7F5DC),
-    tertiary = Color(0xFF89DCEB),
-    onTertiary = Color(0xFF302D41),
-    tertiaryContainer = Color(0xFF4D5B66),
-    onTertiaryContainer = Color(0xFFD4F0FF),
-    error = Color(0xFFF38BA8),
-    onError = Color(0xFF302D41),
-    errorContainer = Color(0xFF8C3A4B),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF1E1E2E),
-    onBackground = Color(0xFFCDD6F4),
-    surface = Color(0xFF1E1E2E),
-    onSurface = Color(0xFFCDD6F4),
-    surfaceVariant = Color(0xFF302D41),
-    onSurfaceVariant = Color(0xFFBAC2DE),
-    outline = Color(0xFF6C7086),
-    outlineVariant = Color(0xFF45475A),
-    surfaceContainer = Color(0xFF313244),
-    surfaceContainerHigh = Color(0xFF45475A),
-    surfaceContainerHighest = Color(0xFF585B70),
-    surfaceContainerLow = Color(0xFF24273A),
-    surfaceContainerLowest = Color(0xFF181825)
+    primary = CatppuccinMocha.pink,
+    onPrimary = CatppuccinMocha.crust,
+    primaryContainer = CatppuccinMocha.surface1,
+    onPrimaryContainer = CatppuccinMocha.pink,
+    
+    secondary = CatppuccinMocha.green,
+    onSecondary = CatppuccinMocha.crust,
+    secondaryContainer = CatppuccinMocha.surface1,
+    onSecondaryContainer = CatppuccinMocha.green,
+    
+    tertiary = CatppuccinMocha.sky,
+    onTertiary = CatppuccinMocha.crust,
+    tertiaryContainer = CatppuccinMocha.surface1,
+    onTertiaryContainer = CatppuccinMocha.sky,
+    
+    error = CatppuccinMocha.red,
+    onError = CatppuccinMocha.crust,
+    errorContainer = CatppuccinMocha.surface1,
+    onErrorContainer = CatppuccinMocha.red,
+    
+    background = CatppuccinMocha.base,
+    onBackground = CatppuccinMocha.text,
+    
+    surface = CatppuccinMocha.base,
+    onSurface = CatppuccinMocha.text,
+    surfaceVariant = CatppuccinMocha.surface0,
+    onSurfaceVariant = CatppuccinMocha.subtext1,
+    
+    outline = CatppuccinMocha.overlay1,
+    outlineVariant = CatppuccinMocha.surface1,
+    
+    surfaceContainer = CatppuccinMocha.surface0,
+    surfaceContainerHigh = CatppuccinMocha.surface1,
+    surfaceContainerHighest = CatppuccinMocha.surface2,
+    surfaceContainerLow = CatppuccinMocha.mantle,
+    surfaceContainerLowest = CatppuccinMocha.crust
 )
 
-private val GruvboxDarkScheme = darkColorScheme(
-    primary = Color(0xFFFE8019),
-    onPrimary = Color(0xFF282828),
-    primaryContainer = Color(0xFF504945),
-    onPrimaryContainer = Color(0xFFFFD6A5),
-    secondary = Color(0xFF8EC07C),
-    onSecondary = Color(0xFF282828),
-    secondaryContainer = Color(0xFF504945),
-    onSecondaryContainer = Color(0xFFD5EADD),
-    tertiary = Color(0xFFFABD2F),
-    onTertiary = Color(0xFF282828),
-    tertiaryContainer = Color(0xFF504945),
-    onTertiaryContainer = Color(0xFFFFF8DC),
-    error = Color(0xFFFB4934),
-    onError = Color(0xFF282828),
-    errorContainer = Color(0xFF9D0006),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF282828),
-    onBackground = Color(0xFFEBDBB2),
-    surface = Color(0xFF282828),
-    onSurface = Color(0xFFEBDBB2),
-    surfaceVariant = Color(0xFF3C3836),
-    onSurfaceVariant = Color(0xFFD5C4A1),
-    outline = Color(0xFF7C6F64),
-    outlineVariant = Color(0xFF504945),
-    surfaceContainer = Color(0xFF3C3836),
-    surfaceContainerHigh = Color(0xFF504945),
-    surfaceContainerHighest = Color(0xFF665C54),
-    surfaceContainerLow = Color(0xFF32302F),
-    surfaceContainerLowest = Color(0xFF1D2021)
-)
+// ============================================================
+// TOKYO NIGHT (Premium)
+// ============================================================
 
 private val TokyoNightDarkScheme = darkColorScheme(
-    primary = Color(0xFF7AA2F7),
-    onPrimary = Color(0xFF1A1B26),
-    primaryContainer = Color(0xFF3D4C6C),
-    onPrimaryContainer = Color(0xFFC0D5FF),
-    secondary = Color(0xFF9ECE6A),
-    onSecondary = Color(0xFF1A1B26),
-    secondaryContainer = Color(0xFF3C4D38),
-    onSecondaryContainer = Color(0xFFD7F5C0),
-    tertiary = Color(0xFFBB9AF7),
-    onTertiary = Color(0xFF1A1B26),
-    tertiaryContainer = Color(0xFF4D3D6C),
-    onTertiaryContainer = Color(0xFFEDD5FF),
-    error = Color(0xFFF7768E),
-    onError = Color(0xFF1A1B26),
-    errorContainer = Color(0xFF8C3A4B),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF1A1B26),
-    onBackground = Color(0xFFC0CAF5),
-    surface = Color(0xFF1A1B26),
-    onSurface = Color(0xFFC0CAF5),
-    surfaceVariant = Color(0xFF24283B),
-    onSurfaceVariant = Color(0xFFA9B1D6),
-    outline = Color(0xFF565F89),
-    outlineVariant = Color(0xFF3B4261),
-    surfaceContainer = Color(0xFF24283B),
-    surfaceContainerHigh = Color(0xFF343A52),
-    surfaceContainerHighest = Color(0xFF414868),
-    surfaceContainerLow = Color(0xFF1F202E),
-    surfaceContainerLowest = Color(0xFF16161E)
+    primary = TokyoNight.blue,
+    onPrimary = TokyoNight.bg_dark,
+    primaryContainer = TokyoNight.bg_highlight,
+    onPrimaryContainer = TokyoNight.blue,
+    
+    secondary = TokyoNight.green,
+    onSecondary = TokyoNight.bg_dark,
+    secondaryContainer = TokyoNight.bg_highlight,
+    onSecondaryContainer = TokyoNight.green,
+    
+    tertiary = TokyoNight.magenta,
+    onTertiary = TokyoNight.bg_dark,
+    tertiaryContainer = TokyoNight.bg_highlight,
+    onTertiaryContainer = TokyoNight.magenta,
+    
+    error = TokyoNight.red,
+    onError = TokyoNight.bg_dark,
+    
+    background = TokyoNight.bg,
+    onBackground = TokyoNight.fg,
+    
+    surface = TokyoNight.bg,
+    onSurface = TokyoNight.fg,
+    surfaceVariant = TokyoNight.bg_highlight,
+    onSurfaceVariant = TokyoNight.fg_dark,
+    
+    outline = TokyoNight.fg_dark,
+    
+    surfaceContainer = TokyoNight.bg_dark,
+    surfaceContainerHigh = TokyoNight.bg_highlight,
+    surfaceContainerLow = Color(0xFF13141C)
 )
+
+// ============================================================
+// GRUVBOX (Premium)
+// ============================================================
+
+private val GruvboxDarkScheme = darkColorScheme(
+    primary = GruvboxDark.orange,
+    onPrimary = GruvboxDark.bg,
+    primaryContainer = GruvboxDark.bg2,
+    onPrimaryContainer = GruvboxDark.orange,
+    
+    secondary = GruvboxDark.aqua,
+    onSecondary = GruvboxDark.bg,
+    secondaryContainer = GruvboxDark.bg2,
+    onSecondaryContainer = GruvboxDark.aqua,
+    
+    tertiary = GruvboxDark.yellow,
+    onTertiary = GruvboxDark.bg,
+    tertiaryContainer = GruvboxDark.bg2,
+    onTertiaryContainer = GruvboxDark.yellow,
+    
+    error = GruvboxDark.red,
+    onError = GruvboxDark.bg,
+    
+    background = GruvboxDark.bg,
+    onBackground = GruvboxDark.fg,
+    
+    surface = GruvboxDark.bg,
+    onSurface = GruvboxDark.fg,
+    surfaceVariant = GruvboxDark.bg1,
+    onSurfaceVariant = GruvboxDark.fg,
+    
+    outline = GruvboxDark.bg2,
+    
+    surfaceContainer = GruvboxDark.bg1,
+    surfaceContainerHigh = GruvboxDark.bg2,
+    surfaceContainerLow = Color(0xFF1D2021)
+)
+
+// ============================================================
+// NORD (Premium)
+// ============================================================
 
 private val NordDarkScheme = darkColorScheme(
-    primary = Color(0xFF88C0D0),
-    onPrimary = Color(0xFF2E3440),
-    primaryContainer = Color(0xFF434C5E),
-    onPrimaryContainer = Color(0xFFD1E8F0),
-    secondary = Color(0xFF81A1C1),
-    onSecondary = Color(0xFF2E3440),
-    secondaryContainer = Color(0xFF434C5E),
-    onSecondaryContainer = Color(0xFFD1DEF0),
-    tertiary = Color(0xFFB48EAD),
-    onTertiary = Color(0xFF2E3440),
-    tertiaryContainer = Color(0xFF4C3A51),
-    onTertiaryContainer = Color(0xFFEDD9E8),
-    error = Color(0xFFBF616A),
-    onError = Color(0xFF2E3440),
-    errorContainer = Color(0xFF8C3A4B),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF2E3440),
-    onBackground = Color(0xFFECEFF4),
-    surface = Color(0xFF2E3440),
-    onSurface = Color(0xFFECEFF4),
-    surfaceVariant = Color(0xFF3B4252),
-    onSurfaceVariant = Color(0xFFD8DEE9),
-    outline = Color(0xFF4C566A),
-    outlineVariant = Color(0xFF3B4252),
-    surfaceContainer = Color(0xFF3B4252),
-    surfaceContainerHigh = Color(0xFF434C5E),
-    surfaceContainerHighest = Color(0xFF4C566A),
-    surfaceContainerLow = Color(0xFF333A47),
-    surfaceContainerLowest = Color(0xFF272D38)
+    primary = Nord.frost1,
+    onPrimary = Nord.polarNight0,
+    primaryContainer = Nord.polarNight2,
+    onPrimaryContainer = Nord.frost1,
+    
+    secondary = Nord.frost2,
+    onSecondary = Nord.polarNight0,
+    secondaryContainer = Nord.polarNight2,
+    onSecondaryContainer = Nord.frost2,
+    
+    tertiary = Nord.auroraPurple,
+    onTertiary = Nord.polarNight0,
+    tertiaryContainer = Nord.polarNight2,
+    onTertiaryContainer = Nord.auroraPurple,
+    
+    error = Nord.auroraRed,
+    onError = Nord.polarNight0,
+    
+    background = Nord.polarNight0,
+    onBackground = Nord.snowStorm2,
+    
+    surface = Nord.polarNight0,
+    onSurface = Nord.snowStorm2,
+    surfaceVariant = Nord.polarNight1,
+    onSurfaceVariant = Nord.snowStorm0,
+    
+    outline = Nord.polarNight2,
+    
+    surfaceContainer = Nord.polarNight1,
+    surfaceContainerHigh = Nord.polarNight2,
+    surfaceContainerLow = Color(0xFF242933)
 )
 
+// ============================================================
+// THEME COMPOSABLE (Material 3 Expressive 2025)
+// ============================================================
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MeDownloaderTheme(
-    theme: AppTheme = AppTheme.DEFAULT,
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
+    appTheme: AppTheme = AppTheme.DEFAULT,
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        // Dynamic color on Android 12+ (only for DEFAULT theme)
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && appTheme == AppTheme.DEFAULT -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        else -> when (theme) {
-            AppTheme.DEFAULT -> if (darkTheme) DefaultDarkScheme else DefaultLightScheme
-            AppTheme.CATPPUCCIN -> CatppuccinDarkScheme
-            AppTheme.GRUVBOX -> GruvboxDarkScheme
-            AppTheme.TOKYO_NIGHT -> TokyoNightDarkScheme
-            AppTheme.NORD -> NordDarkScheme
-        }
+        
+        // Premium themes (dark only for expressive feel)
+        appTheme == AppTheme.CATPPUCCIN -> CatppuccinDarkScheme
+        appTheme == AppTheme.TOKYO_NIGHT -> TokyoNightDarkScheme
+        appTheme == AppTheme.GRUVBOX -> GruvboxDarkScheme
+        appTheme == AppTheme.NORD -> NordDarkScheme
+        
+        // Default theme
+        darkTheme -> DefaultDarkScheme
+        else -> DefaultLightScheme
     }
-
+    
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
+            val window = (view.context as android.app.Activity).window
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme && appTheme == AppTheme.DEFAULT
+                isAppearanceLightNavigationBars = !darkTheme && appTheme == AppTheme.DEFAULT
+            }
         }
     }
 
-    MaterialTheme(
+    // Use MaterialExpressiveTheme for full M3 Expressive support
+    // This enables morphing shapes, expressive motion, and new component APIs
+    MaterialExpressiveTheme(
         colorScheme = colorScheme,
-        typography = Typography,
-        shapes = Shapes,
+        typography = ExpressiveTypography,
+        shapes = ExpressiveShapes,
+        motionScheme = ExpressiveMotionScheme,
         content = content
     )
 }
