@@ -1,3 +1,119 @@
 <resources>
     <string name="app_name">medownloader</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_active">active</string>
+    <string name="dashboard_completed">completed</string>
+    <string name="dashboard_done">done</string>
+    <string name="dashboard_speed">speed</string>
+    <string name="dashboard_empty_title">no downloads yet</string>
+    <string name="dashboard_empty_subtitle">tap the + button to start your first download</string>
+    <string name="dashboard_add_content_desc">add download</string>
+    <string name="dashboard_stats_content_desc">stats</string>
+    <string name="dashboard_settings_content_desc">settings</string>
+    <string name="dashboard_open_content_desc">open</string>
+    <string name="dashboard_remove_content_desc">remove</string>
+
+    <!-- Status -->
+    <string name="status_connecting">connecting...</string>
+    <string name="status_paused">paused</string>
+    <string name="status_waiting">waiting...</string>
+    <string name="status_completed">completed</string>
+    <string name="status_error">error</string>
+    <string name="status_removed">removed</string>
+    <string name="status_starting">starting...</string>
+
+    <!-- Settings -->
+    <string name="settings_title">settings</string>
+    <string name="settings_back_content_desc">back</string>
+    <string name="settings_appearance">appearance</string>
+    <string name="settings_theme">theme</string>
+    <string name="settings_downloads">downloads</string>
+    <string name="settings_wifi_only">wifi only</string>
+    <string name="settings_wifi_only_desc_on">downloads only on wifi</string>
+    <string name="settings_wifi_only_desc_off">downloads on any network</string>
+    <string name="settings_connection_limit">connection limit</string>
+    <string name="settings_max_concurrent">max concurrent downloads</string>
+    <string name="settings_download_location">download location</string>
+    <string name="settings_about">about</string>
+    <string name="settings_version">version</string>
+    <string name="settings_powered_by">powered by</string>
+    <string name="settings_about_app">about medownloader</string>
+    <string name="settings_about_desc">open source information</string>
+    <string name="settings_pro_upgrade">upgrade to pro</string>
+    <string name="settings_pro_desc">16× speed • 12 downloads • designer themes</string>
+    <string name="settings_pro_user">pro user</string>
+    <string name="settings_pro_thanks">thank you for supporting medownloader!</string>
+    <string name="settings_choose_theme">choose theme</string>
+    <string name="settings_done">done</string>
+    <string name="settings_connections_subtitle">more connections = faster downloads</string>
+    <string name="settings_concurrent_subtitle">download multiple files at once</string>
+    <string name="settings_pro_badge">pro</string>
+    <string name="settings_connection_count_fmt">%1$d connection%2$s</string>
+    <string name="settings_connection_free_limit">(free: up to 7)</string>
+    <string name="settings_concurrent_count_fmt">%1$d simultaneous download%2$s</string>
+
+    <!-- Paywall -->
+    <string name="paywall_close_content_desc">close</string>
+    <string name="paywall_unlock_pro">unlock pro</string>
+    <string name="paywall_processing">processing...</string>
+    <string name="paywall_lifetime">lifetime</string>
+    <string name="paywall_restore">restore purchase</string>
+    <string name="paywall_legal">one-time payment. no subscriptions. no recurring fees.</string>
+    
+    <string name="paywall_feat_speed">speed boost</string>
+    <string name="paywall_feat_speed_desc">up to 16 parallel connections</string>
+    <string name="paywall_feat_themes">premium themes</string>
+    <string name="paywall_feat_themes_desc">catppuccin, tokyo night, gruvbox, nord</string>
+    <string name="paywall_feat_lifetime">lifetime access</string>
+    <string name="paywall_feat_lifetime_desc">pay once, use forever</string>
+    <string name="paywall_feat_support">support development</string>
+    <string name="paywall_feat_support_desc">help keep medownloader alive</string>
+
+    <string name="paywall_head_speed">supercharge your downloads</string>
+    <string name="paywall_head_themes">unlock premium themes</string>
+    <string name="paywall_head_torrent">unlock torrent downloads</string>
+    <string name="paywall_head_concurrent">download more at once</string>
+    <string name="paywall_head_settings">unlock all features</string>
+    <string name="paywall_head_manual">go pro</string>
+
+    <string name="paywall_sub_speed">get up to 16x faster downloads with multi-connection acceleration</string>
+    <string name="paywall_sub_themes">beautiful themes crafted for download enthusiasts</string>
+    <string name="paywall_sub_torrent">download torrents and magnet links with pro</string>
+    <string name="paywall_sub_concurrent">remove limits on simultaneous downloads</string>
+    <string name="paywall_sub_settings">full control over your download experience</string>
+    <string name="paywall_sub_manual">one purchase, lifetime of fast downloads</string>
+
+    <!-- Add Download Sheet -->
+    <string name="add_download_title">new download</string>
+    <string name="add_download_close_desc">close</string>
+    <string name="add_download_url_label">url</string>
+    <string name="add_download_url_placeholder">https://example.com/file.zip</string>
+    <string name="add_download_clear_desc">clear</string>
+    <string name="add_download_paste_desc">paste</string>
+    <string name="add_download_valid_url">valid url</string>
+    <string name="add_download_invalid_url">enter a valid url (http:// or https://)</string>
+    <string name="add_download_unknown_type">unknown type</string>
+    <string name="add_download_resume_supported">resume supported</string>
+    <string name="add_download_resume_not_supported">resume not supported</string>
+    <string name="add_download_large_file_hint">large file - speed boost recommended</string>
+    <string name="add_download_fetching">fetching file info...</string>
+    <string name="add_download_start">start download</string>
+    <string name="add_download_add">add download</string>
+
+    <!-- Stats Screen -->
+    <string name="stats_title">statistics</string>
+    <string name="stats_overview">overview</string>
+    <string name="stats_total">total</string>
+    <string name="stats_downloaded">downloaded</string>
+    <string name="stats_status_distribution">download status</string>
+    <string name="stats_failed">failed</string>
+    <string name="stats_speed_analysis">speed analysis</string>
+    <string name="stats_average">average</string>
+    <string name="stats_peak">peak</string>
+    <string name="stats_speed_history">recent speed history</string>
+    <string name="stats_file_types">file types</string>
+    <string name="stats_recent_performance">recent performance</string>
+    <string name="stats_files_suffix">%1$d files</string>
+    <string name="stats_unknown_type">unknown</string>
 </resources>
