@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -383,6 +385,7 @@ private fun SectionHeader(
         )
         Text(
             text = title,
+            modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
@@ -462,6 +465,11 @@ private fun ExpressiveDownloadCard(
                 if (isActive) {
                     ActionButton(
                         icon = if (download.isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                        contentDescription = if (download.isPaused) {
+                            stringResource(R.string.action_resume)
+                        } else {
+                            stringResource(R.string.action_pause)
+                        },
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             if (download.isPaused) onResumeClick() else onPauseClick()
@@ -645,6 +653,7 @@ private fun FileTypeIcon(filename: String, status: DownloadStatus) {
 @Composable
 private fun ActionButton(
     icon: ImageVector,
+    contentDescription: String,
     onClick: () -> Unit,
     containerColor: androidx.compose.ui.graphics.Color,
     contentColor: androidx.compose.ui.graphics.Color
@@ -659,7 +668,9 @@ private fun ActionButton(
     
     FilledIconButton(
         onClick = onClick,
-        modifier = Modifier.size(40.dp).scale(scale),
+        modifier = Modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .scale(scale),
         interactionSource = interactionSource,
         // M3 Expressive: Use shapes parameter for morphing shape support
         shapes = IconButtonDefaults.shapes(),
@@ -668,7 +679,7 @@ private fun ActionButton(
             contentColor = contentColor
         )
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -741,7 +752,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 private fun getStatusText(download: Download): String {
     return when (download.status) {
         DownloadStatus.ACTIVE -> if (download.downloadSpeed > 0) {
-            "ETA: ${formatEta(download.etaSeconds)}"
+            stringResource(R.string.status_eta_fmt, formatEta(download.etaSeconds))
         } else stringResource(R.string.status_connecting)
         DownloadStatus.PAUSED -> stringResource(R.string.status_paused)
         DownloadStatus.WAITING -> stringResource(R.string.status_waiting)
@@ -750,4 +761,3 @@ private fun getStatusText(download: Download): String {
         DownloadStatus.REMOVED -> stringResource(R.string.status_removed)
     }
 }
-
