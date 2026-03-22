@@ -16,6 +16,7 @@
 
     <!-- Status -->
     <string name="status_connecting">connecting...</string>
+    <string name="status_eta_fmt">ETA: %1$s</string>
     <string name="status_paused">paused</string>
     <string name="status_waiting">waiting...</string>
     <string name="status_completed">completed</string>
@@ -116,4 +117,8 @@
     <string name="stats_recent_performance">recent performance</string>
     <string name="stats_files_suffix">%1$d files</string>
     <string name="stats_unknown_type">unknown</string>
+
+    <!-- Download Actions -->
+    <string name="action_pause">pause</string>
+    <string name="action_resume">resume</string>
 </resources>
