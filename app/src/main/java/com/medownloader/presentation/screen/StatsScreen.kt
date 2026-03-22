@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.medownloader.data.model.Download
@@ -77,6 +79,7 @@ fun StatsScreen(
             item {
                 Text(
                     text = stringResource(R.string.stats_overview),
+                    modifier = Modifier.semantics { heading() },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -95,7 +98,9 @@ fun StatsScreen(
                     text = stringResource(R.string.stats_speed_analysis),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .semantics { heading() }
                 )
             }
             
@@ -108,7 +113,9 @@ fun StatsScreen(
                     text = stringResource(R.string.stats_file_types),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .semantics { heading() }
                 )
             }
             
@@ -122,7 +129,9 @@ fun StatsScreen(
                         text = stringResource(R.string.stats_recent_performance),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .semantics { heading() }
                     )
                 }
                 
@@ -373,10 +382,8 @@ private fun SpeedStatsCard(averageSpeed: Long, stats: DownloadStats) {
                     icon = Icons.Outlined.TrendingUp
                 )
             }
-            
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
-            
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             
             Text(
                 text = stringResource(R.string.stats_speed_history),
