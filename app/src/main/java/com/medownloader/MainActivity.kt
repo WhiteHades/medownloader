@@ -2,7 +2,6 @@ package com.medownloader
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -58,37 +58,61 @@ class MainActivity : ComponentActivity() {
                 val connectionLimit by viewModel.connectionLimit.collectAsStateWithLifecycle()
                 
                 val navController = rememberNavController()
+                val snackbarHostState = remember { SnackbarHostState() }
+                val downloadStartedMessage = stringResource(R.string.message_download_started)
+                val speedBoostTipMessage = stringResource(R.string.message_speed_boost_tip)
+                val purchaseSuccessMessage = stringResource(R.string.message_purchase_success)
                 
                 // Handle one-time events
                 LaunchedEffect(Unit) {
                     viewModel.events.collectLatest { event ->
                         when (event) {
                             is UiEvent.ShowError -> {
-                                Toast.makeText(this@MainActivity, event.message, Toast.LENGTH_LONG).show()
+                                snackbarHostState.showSnackbar(
+                                    message = event.message,
+                                    withDismissAction = true,
+                                    duration = SnackbarDuration.Long
+                                )
                             }
                             is UiEvent.DownloadStarted -> {
-                                Toast.makeText(this@MainActivity, "download started", Toast.LENGTH_SHORT).show()
+                                snackbarHostState.showSnackbar(
+                                    message = downloadStartedMessage,
+                                    duration = SnackbarDuration.Short
+                                )
                             }
                             is UiEvent.ShowPaywall -> {
                                 navController.navigate("paywall/${event.reason.name}")
                             }
                             is UiEvent.ShowSpeedBoostSuggestion -> {
-                                // TODO: Show visible nudge
-                                Toast.makeText(this@MainActivity, "tip: get pro for 4x speed", Toast.LENGTH_LONG).show()
+                                snackbarHostState.showSnackbar(
+                                    message = speedBoostTipMessage,
+                                    withDismissAction = true,
+                                    duration = SnackbarDuration.Long
+                                )
                             }
                             is UiEvent.PurchaseSuccess -> {
-                                Toast.makeText(this@MainActivity, "welcome to pro!", Toast.LENGTH_LONG).show()
+                                snackbarHostState.showSnackbar(
+                                    message = purchaseSuccessMessage,
+                                    duration = SnackbarDuration.Short
+                                )
                                 navController.popBackStack()
                             }
                         }
                     }
                 }
-                
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    NavHost(navController = navController, startDestination = "dashboard") {
+
+                Scaffold(
+                    snackbarHost = {
+                        SnackbarHost(hostState = snackbarHostState)
+                    }
+                ) { scaffoldPadding ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(scaffoldPadding),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        NavHost(navController = navController, startDestination = "dashboard") {
                         
                         composable("dashboard") {
                             DashboardScreen(
@@ -167,20 +191,21 @@ class MainActivity : ComponentActivity() {
                                 triggerReason = reason
                             )
                         }
-                    }
-                    
-                    if (uiState.showAddDialog) {
-                         AddDownloadSheet(
-                             fileInfo = uiState.fileInfo,
-                             isLoading = uiState.isLoadingFileInfo,
-                             pendingUrl = uiState.pendingUrl,
-                             onFetchInfo = viewModel::fetchFileInfo,
-                             onConfirmAdd = { url, filename -> 
-                                 viewModel.addDownload(url, filename)
-                                 viewModel.dismissAddDialog()
-                             },
-                             onDismiss = viewModel::dismissAddDialog
-                         )
+                        }
+
+                        if (uiState.showAddDialog) {
+                            AddDownloadSheet(
+                                fileInfo = uiState.fileInfo,
+                                isLoading = uiState.isLoadingFileInfo,
+                                pendingUrl = uiState.pendingUrl,
+                                onFetchInfo = viewModel::fetchFileInfo,
+                                onConfirmAdd = { url, filename ->
+                                    viewModel.addDownload(url, filename)
+                                    viewModel.dismissAddDialog()
+                                },
+                                onDismiss = viewModel::dismissAddDialog
+                            )
+                        }
                     }
                 }
             }
