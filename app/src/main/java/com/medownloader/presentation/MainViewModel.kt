@@ -1,6 +1,7 @@
 package com.medownloader.presentation
 
 import android.app.Activity
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -8,7 +9,9 @@ import com.medownloader.data.model.Download
 import com.medownloader.data.model.Aria2GlobalStat
 import com.medownloader.data.repository.DownloadRepository
 import com.medownloader.data.repository.FileInfo
+import com.medownloader.data.repository.FreeTierLimits
 import com.medownloader.data.repository.PremiumRepository
+import com.medownloader.data.repository.PremiumTierLimits
 import com.medownloader.data.repository.SettingsRepository
 import com.medownloader.di.ServiceLocator
 import com.medownloader.presentation.screen.PaywallTriggerReason
@@ -21,6 +24,21 @@ class MainViewModel(
     private val premiumRepository: PremiumRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "MainViewModel"
+
+        val Factory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return MainViewModel(
+                    downloadRepository = ServiceLocator.provideDownloadRepository(),
+                    premiumRepository = ServiceLocator.providePremiumRepository(),
+                    settingsRepository = ServiceLocator.provideSettingsRepository()
+                ) as T
+            }
+        }
+    }
 
     // ========================================================================
     // UI State
@@ -52,6 +70,7 @@ class MainViewModel(
 
     init {
         observeDownloads()
+        observeRuntimeLimits()
         checkPremiumOnStart()
     }
 
@@ -77,10 +96,16 @@ class MainViewModel(
         // check concurrent downloads
         val activeCount = _uiState.value.activeDownloads.size
         val configuredMax = maxConcurrent.value
+        val tierMax = if (isPremium.value) {
+            PremiumTierLimits.MAX_CONCURRENT_DOWNLOADS
+        } else {
+            FreeTierLimits.MAX_CONCURRENT_DOWNLOADS
+        }
+        val effectiveMax = configuredMax.coerceAtMost(tierMax)
         
-        if (activeCount >= configuredMax) {
+        if (activeCount >= effectiveMax) {
             viewModelScope.launch {
-                _events.emit(UiEvent.ShowError("maximum $configuredMax concurrent downloads reached"))
+                _events.emit(UiEvent.ShowError("maximum $effectiveMax concurrent downloads reached"))
             }
             return
         }
@@ -188,21 +213,35 @@ class MainViewModel(
     
     fun updateMaxConcurrent(count: Int) {
         viewModelScope.launch {
-            if (!isPremium.value && count > 4) {
+            val tierMax = if (isPremium.value) {
+                PremiumTierLimits.MAX_CONCURRENT_DOWNLOADS
+            } else {
+                FreeTierLimits.MAX_CONCURRENT_DOWNLOADS
+            }
+
+            if (!isPremium.value && count > tierMax) {
                  requestPaywall(PaywallTriggerReason.CONCURRENT_LIMIT)
                  return@launch
-            }
-            settingsRepository.setMaxConcurrentDownloads(count)
+             }
+
+            settingsRepository.setMaxConcurrentDownloads(count.coerceIn(1, tierMax))
         }
     }
     
     fun updateConnectionLimit(count: Int) {
          viewModelScope.launch {
-            if (!isPremium.value && count > 7) {
-                 requestPaywall(PaywallTriggerReason.SPEED_BOOST_BLOCKED)
-                 return@launch
+            val tierMax = if (isPremium.value) {
+                PremiumTierLimits.CONNECTIONS_PER_FILE
+            } else {
+                FreeTierLimits.CONNECTIONS_PER_FILE
             }
-            settingsRepository.setConnectionLimit(count)
+
+            if (!isPremium.value && count > tierMax) {
+                  requestPaywall(PaywallTriggerReason.SPEED_BOOST_BLOCKED)
+                  return@launch
+             }
+
+            settingsRepository.setConnectionLimit(count.coerceIn(1, tierMax))
          }
     }
     
@@ -285,6 +324,7 @@ class MainViewModel(
                 .catch { error ->
                     _events.emit(UiEvent.ShowError("connection lost: ${error.message}"))
                 }
+                .distinctUntilChanged()
                 .collect { downloads ->
                     _uiState.update { state ->
                         state.copy(
@@ -297,22 +337,23 @@ class MainViewModel(
         }
     }
 
-    // ========================================================================
-    // Factory
-    // ========================================================================
-    
-    companion object {
-        val Factory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return MainViewModel(
-                    downloadRepository = ServiceLocator.provideDownloadRepository(),
-                    premiumRepository = ServiceLocator.providePremiumRepository(),
-                    settingsRepository = ServiceLocator.provideSettingsRepository()
-                ) as T
+    private fun observeRuntimeLimits() {
+        viewModelScope.launch {
+            combine(maxConcurrent, connectionLimit) { concurrent, connections ->
+                concurrent to connections
             }
+                .distinctUntilChanged()
+                .collectLatest { (concurrent, connections) ->
+                    downloadRepository.applyRuntimeLimits(
+                        maxConcurrent = concurrent,
+                        connectionLimit = connections
+                    ).onFailure { error ->
+                        Log.w(TAG, "Failed to apply runtime limits", error)
+                    }
+                }
         }
     }
+
 }
 
 // ============================================================================

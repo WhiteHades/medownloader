@@ -72,6 +72,11 @@ interface DownloadRepository {
      * Returns filename and size if available.
      */
     suspend fun fetchFileInfo(url: String): Result<FileInfo>
+
+    /**
+     * Apply runtime engine limits without restarting aria2.
+     */
+    suspend fun applyRuntimeLimits(maxConcurrent: Int, connectionLimit: Int): Result<Unit>
 }
 
 data class FileInfo(
@@ -89,6 +94,14 @@ class DownloadRepositoryImpl(
     private val processManager: Aria2ProcessManager,
     private val context: Context
 ) : DownloadRepository {
+
+    private val fileInfoHttpClient by lazy {
+        okhttp3.OkHttpClient.Builder()
+            .followRedirects(true)
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+    }
     
     companion object {
         // Domains that are forbidden by Google Play Policy
@@ -177,13 +190,6 @@ class DownloadRepositoryImpl(
                 )
             }
             
-            // Use OkHttp HEAD request with timeout
-            val client = okhttp3.OkHttpClient.Builder()
-                .followRedirects(true)
-                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .build()
-            
             // Try HEAD first
             var request = okhttp3.Request.Builder()
                 .url(url)
@@ -191,7 +197,7 @@ class DownloadRepositoryImpl(
                 .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
                 .build()
             
-            var response = client.newCall(request).execute()
+            var response = fileInfoHttpClient.newCall(request).execute()
             var responseCode = response.code
             
             // Many servers reject HEAD (405, 403, 410, etc.), fallback to GET with Range header
@@ -203,7 +209,7 @@ class DownloadRepositoryImpl(
                     .addHeader("Range", "bytes=0-0")
                     .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
                     .build()
-                response = client.newCall(request).execute()
+                response = fileInfoHttpClient.newCall(request).execute()
                 responseCode = response.code
             }
             
@@ -257,6 +263,23 @@ class DownloadRepositoryImpl(
         } catch (e: Exception) {
             Result.failure(Exception("Failed: ${e::class.simpleName} - ${e.message ?: e.toString()}"))
         }
+    }
+
+    override suspend fun applyRuntimeLimits(maxConcurrent: Int, connectionLimit: Int): Result<Unit> {
+        val safeMaxConcurrent = maxConcurrent.coerceIn(1, 16)
+        val safeConnectionLimit = connectionLimit.coerceIn(1, 16)
+
+        if (processManager.processState.value != Aria2ProcessManager.ProcessState.Running) {
+            return Result.success(Unit)
+        }
+
+        return rpcClient.changeGlobalOption(
+            mapOf(
+                "max-concurrent-downloads" to safeMaxConcurrent.toString(),
+                "max-connection-per-server" to safeConnectionLimit.toString(),
+                "split" to safeConnectionLimit.toString()
+            )
+        ).map { }
     }
     
     /**
