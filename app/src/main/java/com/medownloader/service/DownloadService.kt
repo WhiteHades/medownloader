@@ -56,6 +56,7 @@ class DownloadService : Service() {
     private lateinit var rpcClient: Aria2RpcClient
     
     private var progressJob: Job? = null
+    private val activeNotificationIds = mutableSetOf<Int>()
 
     // ========================================================================
     // Service Lifecycle
@@ -109,6 +110,7 @@ class DownloadService : Service() {
         scope.launch {
             rpcClient.shutdown()
             processManager.stop()
+            clearProgressNotifications()
         }
         scope.cancel()
         super.onDestroy()
@@ -131,6 +133,7 @@ class DownloadService : Service() {
     private fun handleStopEngine() {
         scope.launch {
             progressJob?.cancel()
+            clearProgressNotifications()
             processManager.stop()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -191,10 +194,24 @@ class DownloadService : Service() {
 
     private fun updateProgressNotifications(downloads: List<Download>) {
         val manager = getSystemService(NotificationManager::class.java)
-        
-        downloads.filter { it.isActive }.forEachIndexed { index, download ->
-            val notification = createProgressNotification(download)
-            manager.notify(NOTIFICATION_ID + 1 + index, notification)
+
+        val activeDownloads = downloads.filter { it.isActive }
+        val currentIds = activeDownloads
+            .map { notificationIdForGid(it.gid) }
+            .toSet()
+
+        (activeNotificationIds - currentIds).forEach { staleId ->
+            manager.cancel(staleId)
+        }
+
+        activeNotificationIds.clear()
+        activeNotificationIds.addAll(currentIds)
+
+        activeDownloads.forEach { download ->
+            manager.notify(
+                notificationIdForGid(download.gid),
+                createProgressNotification(download)
+            )
         }
     }
 
@@ -299,6 +316,16 @@ class DownloadService : Service() {
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+    }
+
+    private fun clearProgressNotifications() {
+        val manager = getSystemService(NotificationManager::class.java)
+        activeNotificationIds.forEach { manager.cancel(it) }
+        activeNotificationIds.clear()
+    }
+
+    private fun notificationIdForGid(gid: String): Int {
+        return NOTIFICATION_ID + 1000 + (gid.hashCode() and 0x7fffffff)
     }
 
     private fun formatSpeed(bytesPerSecond: Long): String {
