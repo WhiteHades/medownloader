@@ -67,6 +67,7 @@
     <string name="paywall_close_content_desc">close</string>
     <string name="paywall_unlock_pro">unlock pro</string>
     <string name="paywall_processing">processing...</string>
+    <string name="paywall_loading_price">loading...</string>
     <string name="paywall_lifetime">lifetime</string>
     <string name="paywall_restore">restore purchase</string>
     <string name="paywall_legal">one-time payment. no subscriptions. no recurring fees.</string>
