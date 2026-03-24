@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.medownloader.data.repository.FileInfo
 import com.medownloader.ui.theme.*
+import java.net.URI
 
 import com.medownloader.R
 
@@ -50,6 +51,8 @@ fun AddDownloadSheet(
     
     // Local URL state, initialized from pendingUrl
     var url by remember(pendingUrl) { mutableStateOf(pendingUrl ?: "") }
+    val normalizedUrl = url.trim()
+    val isUrlValid = isSupportedUrl(normalizedUrl)
     
     // Auto-focus URL field
     LaunchedEffect(Unit) {
@@ -115,7 +118,7 @@ fun AddDownloadSheet(
                     Icon(
                         Icons.Outlined.Link,
                         contentDescription = null,
-                        tint = if (url.isNotEmpty() && isValidUrl(url))
+                        tint = if (normalizedUrl.isNotEmpty() && isUrlValid)
                             MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -152,11 +155,11 @@ fun AddDownloadSheet(
                 ),
                 keyboardActions = KeyboardActions(
                     onGo = {
-                        if (url.isNotEmpty() && isValidUrl(url)) {
+                        if (normalizedUrl.isNotEmpty() && isUrlValid) {
                             if (fileInfo != null) {
-                                onConfirmAdd(url, fileInfo.filename)
+                                onConfirmAdd(normalizedUrl, fileInfo.filename)
                             } else {
-                                onFetchInfo(url)
+                                onFetchInfo(normalizedUrl)
                             }
                         }
                     }
@@ -176,8 +179,8 @@ fun AddDownloadSheet(
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
-                if (isValidUrl(url)) {
-                    UrlValidCard(url = url)
+                if (normalizedUrl.isNotEmpty() && isUrlValid) {
+                    UrlValidCard(url = normalizedUrl)
                 } else {
                     UrlInvalidCard()
                 }
@@ -211,20 +214,22 @@ fun AddDownloadSheet(
                 ExpressiveDownloadButton(
                     onClick = {
                         view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                        onConfirmAdd(url, fileInfo.filename)
+                        if (normalizedUrl.isNotEmpty() && isUrlValid) {
+                            onConfirmAdd(normalizedUrl, fileInfo.filename)
+                        }
                     },
-                    enabled = !isLoading,
+                    enabled = !isLoading && normalizedUrl.isNotEmpty() && isUrlValid,
                     text = stringResource(R.string.add_download_start)
                 )
             } else {
                 ExpressiveDownloadButton(
                     onClick = {
                         view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                        if (url.isNotEmpty() && isValidUrl(url)) {
-                            onFetchInfo(url)
+                        if (normalizedUrl.isNotEmpty() && isUrlValid) {
+                            onFetchInfo(normalizedUrl)
                         }
                     },
-                    enabled = url.isNotEmpty() && isValidUrl(url) && !isLoading,
+                    enabled = normalizedUrl.isNotEmpty() && isUrlValid && !isLoading,
                     text = stringResource(R.string.add_download_add)
                 )
             }
@@ -469,12 +474,21 @@ private fun ExpressiveDownloadButton(
 }
 
 // Utility functions
-private fun isValidUrl(url: String): Boolean {
-    return url.startsWith("http://") || url.startsWith("https://") ||
-           url.startsWith("ftp://") || url.startsWith("magnet:")
+private fun isSupportedUrl(url: String): Boolean {
+    val scheme = try {
+        URI(url).scheme?.lowercase()
+    } catch (_: Exception) {
+        null
+    }
+
+    return scheme == "http" || scheme == "https" || scheme == "magnet"
 }
 
 private fun extractDomain(url: String): String {
+    if (url.startsWith("magnet:", ignoreCase = true)) {
+        return "magnet link"
+    }
+
     return try {
         val cleaned = url.removePrefix("https://").removePrefix("http://").removePrefix("ftp://")
         cleaned.substringBefore("/").substringBefore("?")

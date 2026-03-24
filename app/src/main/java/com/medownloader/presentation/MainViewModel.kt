@@ -79,8 +79,16 @@ class MainViewModel(
     // ========================================================================
     
     fun addDownload(url: String, filename: String? = null) {
+        val normalizedUrl = normalizeIncomingUrl(url)
+        if (normalizedUrl == null) {
+            viewModelScope.launch {
+                _events.emit(UiEvent.ShowError("enter a valid download url"))
+            }
+            return
+        }
+
         // youtube blocked by google play rules
-        if (!downloadRepository.isUrlAllowed(url)) {
+        if (!downloadRepository.isUrlAllowed(normalizedUrl)) {
             viewModelScope.launch {
                 _events.emit(UiEvent.ShowError("downloads from youtube are not allowed by google play policy"))
             }
@@ -88,7 +96,7 @@ class MainViewModel(
         }
         
         // torrent/magnet requires premium
-        if (isTorrentOrMagnet(url) && !premiumRepository.isTorrentEnabled()) {
+        if (isTorrentOrMagnet(normalizedUrl) && !premiumRepository.isTorrentEnabled()) {
             requestPaywall(PaywallTriggerReason.TORRENT_BLOCKED)
             return
         }
@@ -113,7 +121,7 @@ class MainViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isAddingDownload = true) }
             
-            downloadRepository.addDownload(url, filename)
+            downloadRepository.addDownload(normalizedUrl, filename)
                 .onSuccess { gid ->
                     _events.emit(UiEvent.DownloadStarted(gid))
                 }
@@ -126,10 +134,18 @@ class MainViewModel(
     }
     
     fun fetchFileInfo(url: String) {
+        val normalizedUrl = normalizeIncomingUrl(url)
+        if (normalizedUrl == null) {
+            viewModelScope.launch {
+                _events.emit(UiEvent.ShowError("enter a valid download url"))
+            }
+            return
+        }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingFileInfo = true, pendingUrl = url) }
+            _uiState.update { it.copy(isLoadingFileInfo = true, pendingUrl = normalizedUrl) }
             
-            downloadRepository.fetchFileInfo(url)
+            downloadRepository.fetchFileInfo(normalizedUrl)
                 .onSuccess { info ->
                     _uiState.update { 
                         it.copy(
@@ -316,6 +332,11 @@ class MainViewModel(
         return lower.startsWith("magnet:") || 
                lower.endsWith(".torrent") ||
                lower.contains("btih:")
+    }
+
+    private fun normalizeIncomingUrl(url: String): String? {
+        val normalized = url.trim()
+        return if (normalized.isEmpty()) null else normalized
     }
     
     private fun observeDownloads() {
