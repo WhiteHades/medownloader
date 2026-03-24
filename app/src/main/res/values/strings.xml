@@ -62,6 +62,12 @@
     <string name="settings_connection_count_fmt">%1$d connection%2$s</string>
     <string name="settings_connection_free_limit">(free: up to 7)</string>
     <string name="settings_concurrent_count_fmt">%1$d simultaneous download%2$s</string>
+    <string name="settings_download_path_default">Default (Downloads)</string>
+
+    <!-- Events -->
+    <string name="event_download_started">download started</string>
+    <string name="event_speed_boost_tip">tip: get pro for 4x speed</string>
+    <string name="event_purchase_success">welcome to pro!</string>
 
     <!-- Paywall -->
     <string name="paywall_close_content_desc">close</string>
