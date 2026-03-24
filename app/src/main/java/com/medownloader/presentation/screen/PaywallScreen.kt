@@ -141,6 +141,7 @@ fun PaywallScreen(
             PurchaseSection(
                 formattedPrice = priceFormatted,
                 isPurchasing = isPurchasing,
+                isLoading = isLoading,
                 onPurchaseClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                     onPurchase()
@@ -150,7 +151,7 @@ fun PaywallScreen(
             // Restore purchases
             TextButton(
                 onClick = onRestore,
-                enabled = !isPurchasing
+                enabled = !isPurchasing && !isLoading
             ) {
                 Text(
                     text = stringResource(R.string.paywall_restore),
@@ -361,6 +362,7 @@ private fun FeatureRow(feature: Feature, delay: Int) {
 private fun PurchaseSection(
     formattedPrice: String,
     isPurchasing: Boolean,
+    isLoading: Boolean,
     onPurchaseClick: () -> Unit
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
@@ -382,7 +384,11 @@ private fun PurchaseSection(
             verticalAlignment = Alignment.Bottom
         ) {
             Text(
-                text = formattedPrice,
+                text = if (isLoading) {
+                    stringResource(R.string.paywall_loading_price)
+                } else {
+                    formattedPrice
+                },
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -404,7 +410,7 @@ private fun PurchaseSection(
                 .fillMaxWidth()
                 .height(60.dp)
                 .scale(scale),
-            enabled = !isPurchasing,
+            enabled = !isPurchasing && !isLoading,
             interactionSource = interactionSource,
             // M3 Expressive: Use shapes parameter for morphing shape support
             shapes = ButtonDefaults.shapes(),
