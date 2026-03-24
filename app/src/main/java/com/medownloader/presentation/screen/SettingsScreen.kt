@@ -33,6 +33,7 @@ import com.medownloader.ui.theme.*
 fun SettingsScreen(
     currentTheme: AppTheme,
     isPremium: Boolean,
+    proPrice: String,
     wifiOnly: Boolean,
     maxConcurrent: Int,
     connectionLimit: Int,
@@ -50,6 +51,22 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showConnectionsDialog by remember { mutableStateOf(false) }
     var showConcurrentDialog by remember { mutableStateOf(false) }
+
+    val connectionCountText = stringResource(
+        R.string.settings_connection_count_fmt,
+        connectionLimit,
+        if (connectionLimit > 1) "s" else ""
+    )
+    val connectionSubtitle = if (isPremium) {
+        "$connectionCountText • ${stringResource(R.string.settings_connections_subtitle)}"
+    } else {
+        "$connectionCountText ${stringResource(R.string.settings_connection_free_limit)}"
+    }
+    val concurrentCountText = stringResource(
+        R.string.settings_concurrent_count_fmt,
+        maxConcurrent,
+        if (maxConcurrent > 1) "s" else ""
+    )
     
     Scaffold(
         topBar = {
@@ -82,7 +99,10 @@ fun SettingsScreen(
             // Premium Card (if not premium)
             if (!isPremium) {
                 item {
-                    PremiumUpgradeCard(onUpgradeClick = onGetProClick)
+                    PremiumUpgradeCard(
+                        proPrice = proPrice,
+                        onUpgradeClick = onGetProClick
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -138,7 +158,7 @@ fun SettingsScreen(
                     SettingsItem(
                         icon = Icons.Outlined.Speed,
                         title = stringResource(R.string.settings_connection_limit),
-                        subtitle = if (isPremium) stringResource(R.string.settings_connection_count_fmt, connectionLimit, stringResource(R.string.settings_connections_subtitle)) else "${connectionLimit} " + stringResource(R.string.settings_connection_free_limit),
+                        subtitle = connectionSubtitle,
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             showConnectionsDialog = true
@@ -155,7 +175,7 @@ fun SettingsScreen(
                     SettingsItem(
                         icon = Icons.Outlined.Queue,
                         title = stringResource(R.string.settings_max_concurrent),
-                        subtitle = stringResource(R.string.settings_concurrent_count_fmt, maxConcurrent, if (maxConcurrent > 1) "s" else ""),
+                        subtitle = concurrentCountText,
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             showConcurrentDialog = true
@@ -302,7 +322,10 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun PremiumUpgradeCard(onUpgradeClick: () -> Unit) {
+private fun PremiumUpgradeCard(
+    proPrice: String,
+    onUpgradeClick: () -> Unit
+) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -382,7 +405,7 @@ private fun PremiumUpgradeCard(onUpgradeClick: () -> Unit) {
                 shape = ExpressiveShapeTokens.Full
             ) {
                 Text(
-                    text = stringResource(R.string.price_lifetime_fmt, "$3.99"),
+                    text = proPrice,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
@@ -636,7 +659,7 @@ private fun ThemeSelectionDialog(
                                 if (isLocked) {
                                     Icon(
                                         Icons.Filled.Lock,
-                                        contentDescription = stringResource(R.string.settings_theme_lock_content_desc),
+                                        contentDescription = stringResource(R.string.settings_pro_badge),
                                         modifier = Modifier.size(14.dp),
                                         tint = MaterialTheme.colorScheme.tertiary
                                     )
