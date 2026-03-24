@@ -21,6 +21,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.medownloader.R
@@ -98,7 +100,7 @@ fun SettingsScreen(
                     SettingsItem(
                         icon = Icons.Outlined.ColorLens,
                         title = stringResource(R.string.settings_theme),
-                        subtitle = currentTheme.displayName,
+                        subtitle = currentTheme.displayName(),
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             showThemeDialog = true
@@ -193,7 +195,7 @@ fun SettingsScreen(
                     SettingsItem(
                         icon = Icons.Outlined.Description,
                         title = stringResource(R.string.settings_version),
-                        subtitle = "1.0.0",
+                        subtitle = stringResource(R.string.settings_version_value),
                         onClick = { },
                         showChevron = false
                     )
@@ -206,7 +208,7 @@ fun SettingsScreen(
                     SettingsItem(
                         icon = Icons.Outlined.Code,
                         title = stringResource(R.string.settings_powered_by),
-                        subtitle = "aria2c",
+                        subtitle = stringResource(R.string.settings_powered_by_value),
                         onClick = { },
                         showChevron = false
                     )
@@ -262,7 +264,7 @@ fun SettingsScreen(
     if (showConnectionsDialog) {
         ConnectionsDialog(
             title = stringResource(R.string.settings_connection_limit),
-            subtitle = stringResource(R.string.settings_connections_subtitle),
+            subtitle = stringResource(R.string.settings_dialog_max_connections_subtitle),
             currentValue = connectionLimit,
             isPremium = isPremium,
             freeLimit = 7,
@@ -380,7 +382,7 @@ private fun PremiumUpgradeCard(onUpgradeClick: () -> Unit) {
                 shape = ExpressiveShapeTokens.Full
             ) {
                 Text(
-                    text = "$3.99",
+                    text = stringResource(R.string.price_lifetime_fmt, "$3.99"),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
@@ -428,7 +430,9 @@ private fun PremiumStatusCard() {
 @Composable
 private fun SettingsSectionHeader(title: String, icon: ImageVector) {
     Row(
-        modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
+        modifier = Modifier
+            .padding(vertical = 12.dp, horizontal = 4.dp)
+            .semantics { heading() },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -577,13 +581,15 @@ private fun ThemeSelectionDialog(
     onDismiss: () -> Unit,
     onUpgradeClick: () -> Unit
 ) {
+    val doneLabel = stringResource(R.string.common_done)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = stringResource(R.string.settings_choose_theme),
-                fontWeight = FontWeight.Bold
-            )
+                Text(
+                    text = stringResource(R.string.settings_choose_theme),
+                    fontWeight = FontWeight.Bold
+                )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -620,7 +626,7 @@ private fun ThemeSelectionDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = theme.displayName,
+                                    text = theme.displayName(),
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = if (currentTheme == theme) FontWeight.SemiBold else FontWeight.Normal,
                                     color = if (isLocked)
@@ -630,7 +636,7 @@ private fun ThemeSelectionDialog(
                                 if (isLocked) {
                                     Icon(
                                         Icons.Filled.Lock,
-                                        contentDescription = "Premium",
+                                        contentDescription = stringResource(R.string.settings_theme_lock_content_desc),
                                         modifier = Modifier.size(14.dp),
                                         tint = MaterialTheme.colorScheme.tertiary
                                     )
@@ -657,7 +663,7 @@ private fun ThemeSelectionDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Done")
+                Text(doneLabel)
             }
         },
         shape = ExpressiveShapeTokens.Dialog
@@ -666,8 +672,8 @@ private fun ThemeSelectionDialog(
 
 @Composable
 private fun ConnectionsDialog(
-    title: String = "Max Connections",
-    subtitle: String = "More connections = faster downloads (depends on server)",
+    title: String,
+    subtitle: String,
     currentValue: Int,
     isPremium: Boolean = true,
     freeLimit: Int = 7,
@@ -676,6 +682,7 @@ private fun ConnectionsDialog(
     onDismiss: () -> Unit
 ) {
     val options = listOf(1, 2, 4, 8, 16)
+    val doneLabel = stringResource(R.string.common_done)
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -720,7 +727,11 @@ private fun ConnectionsDialog(
                             enabled = !isLocked
                         )
                         Text(
-                            text = "$value connection${if (value > 1) "s" else ""}",
+                            text = stringResource(
+                                R.string.settings_connection_value_fmt,
+                                value,
+                                if (value > 1) "s" else ""
+                            ),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = if (currentValue == value) FontWeight.SemiBold else FontWeight.Normal,
                             color = if (isLocked) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
@@ -732,7 +743,7 @@ private fun ConnectionsDialog(
                                 shape = ExpressiveShapeTokens.Full
                             ) {
                                 Text(
-                                text = stringResource(R.string.settings_pro_badge),
+                                    text = stringResource(R.string.settings_pro_badge),
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
@@ -746,22 +757,22 @@ private fun ConnectionsDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Done")
+                Text(doneLabel)
             }
         },
         shape = ExpressiveShapeTokens.Dialog
     )
 }
 
-// Extension property for theme display names and preview colors
-val AppTheme.displayName: String
-    get() = when (this) {
-        AppTheme.DEFAULT -> "Default"
-        AppTheme.CATPPUCCIN -> "Catppuccin Mocha"
-        AppTheme.TOKYO_NIGHT -> "Tokyo Night"
-        AppTheme.GRUVBOX -> "Gruvbox Dark"
-        AppTheme.NORD -> "Nord"
-    }
+// Theme helpers
+@Composable
+private fun AppTheme.displayName(): String = when (this) {
+    AppTheme.DEFAULT -> stringResource(R.string.theme_default)
+    AppTheme.CATPPUCCIN -> stringResource(R.string.theme_catppuccin_mocha)
+    AppTheme.TOKYO_NIGHT -> stringResource(R.string.theme_tokyo_night)
+    AppTheme.GRUVBOX -> stringResource(R.string.theme_gruvbox_dark)
+    AppTheme.NORD -> stringResource(R.string.theme_nord)
+}
 
 val AppTheme.previewColors: Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color>
     get() = when (this) {

@@ -13,6 +13,9 @@
     <string name="dashboard_settings_content_desc">settings</string>
     <string name="dashboard_open_content_desc">open</string>
     <string name="dashboard_remove_content_desc">remove</string>
+    <string name="message_download_started">download started</string>
+    <string name="message_speed_boost_tip">tip: get pro for 4x speed</string>
+    <string name="message_purchase_success">welcome to pro!</string>
 
     <!-- Status -->
     <string name="status_connecting">connecting...</string>
@@ -38,7 +41,9 @@
     <string name="settings_download_location">download location</string>
     <string name="settings_about">about</string>
     <string name="settings_version">version</string>
+    <string name="settings_version_value">1.0.0</string>
     <string name="settings_powered_by">powered by</string>
+    <string name="settings_powered_by_value">aria2c</string>
     <string name="settings_about_app">about medownloader</string>
     <string name="settings_about_desc">open source information</string>
     <string name="settings_pro_upgrade">upgrade to pro</string>
@@ -47,6 +52,10 @@
     <string name="settings_pro_thanks">thank you for supporting medownloader!</string>
     <string name="settings_choose_theme">choose theme</string>
     <string name="settings_done">done</string>
+    <string name="settings_dialog_max_connections_title">max connections</string>
+    <string name="settings_dialog_max_connections_subtitle">more connections = faster downloads (depends on server)</string>
+    <string name="settings_connection_value_fmt">%1$d connection%2$s</string>
+    <string name="settings_theme_lock_content_desc">premium</string>
     <string name="settings_connections_subtitle">more connections = faster downloads</string>
     <string name="settings_concurrent_subtitle">download multiple files at once</string>
     <string name="settings_pro_badge">pro</string>
@@ -117,6 +126,16 @@
     <string name="stats_recent_performance">recent performance</string>
     <string name="stats_files_suffix">%1$d files</string>
     <string name="stats_unknown_type">unknown</string>
+
+    <string name="common_done">done</string>
+    <string name="price_lifetime_fmt">%1$s</string>
+
+    <!-- Theme names -->
+    <string name="theme_default">Default</string>
+    <string name="theme_catppuccin_mocha">Catppuccin Mocha</string>
+    <string name="theme_tokyo_night">Tokyo Night</string>
+    <string name="theme_gruvbox_dark">Gruvbox Dark</string>
+    <string name="theme_nord">Nord</string>
 
     <!-- Download Actions -->
     <string name="action_pause">pause</string>
