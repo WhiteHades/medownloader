@@ -102,17 +102,19 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Scaffold(
+                    modifier = Modifier.fillMaxSize(),
                     snackbarHost = {
                         SnackbarHost(hostState = snackbarHostState)
-                    }
-                ) { scaffoldPadding ->
-                    Surface(
+                    },
+                    containerColor = MaterialTheme.colorScheme.background
+                ) { innerPadding ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = "dashboard",
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(scaffoldPadding),
-                        color = MaterialTheme.colorScheme.background
+                            .padding(innerPadding)
                     ) {
-                        NavHost(navController = navController, startDestination = "dashboard") {
                         
                         composable("dashboard") {
                             DashboardScreen(
@@ -149,7 +151,7 @@ class MainActivity : ComponentActivity() {
                                 wifiOnly = wifiOnly,
                                 maxConcurrent = maxConcurrent,
                                 connectionLimit = connectionLimit,
-                                downloadPath = downloadDir ?: "Default (Downloads)",
+                                downloadPath = downloadDir ?: stringResource(R.string.settings_download_path_default),
                                 onThemeSelected = viewModel::updateTheme,
                                 onWifiOnlyChanged = viewModel::updateWifiOnly,
                                 onMaxConcurrentChanged = viewModel::updateMaxConcurrent,
@@ -184,7 +186,7 @@ class MainActivity : ComponentActivity() {
                             PaywallScreen(
                                 priceFormatted = uiState.formattedPrice,
                                 isPurchasing = uiState.isPurchasing,
-                                isLoading = false,
+                                isLoading = uiState.isPricingLoading,
                                 errorMessage = uiState.purchaseError,
                                 onPurchase = { viewModel.purchaseLifetime(this@MainActivity) },
                                 onRestore = { viewModel.restorePurchases() },
@@ -192,21 +194,20 @@ class MainActivity : ComponentActivity() {
                                 triggerReason = reason
                             )
                         }
-                        }
-
-                        if (uiState.showAddDialog) {
-                            AddDownloadSheet(
-                                fileInfo = uiState.fileInfo,
-                                isLoading = uiState.isLoadingFileInfo,
-                                pendingUrl = uiState.pendingUrl,
-                                onFetchInfo = viewModel::fetchFileInfo,
-                                onConfirmAdd = { url, filename ->
-                                    viewModel.addDownload(url, filename)
-                                    viewModel.dismissAddDialog()
-                                },
-                                onDismiss = viewModel::dismissAddDialog
-                            )
-                        }
+                    }
+                    
+                    if (uiState.showAddDialog) {
+                        AddDownloadSheet(
+                            fileInfo = uiState.fileInfo,
+                            isLoading = uiState.isLoadingFileInfo,
+                            pendingUrl = uiState.pendingUrl,
+                            onFetchInfo = viewModel::fetchFileInfo,
+                            onConfirmAdd = { url, filename ->
+                                viewModel.addDownload(url, filename)
+                                viewModel.dismissAddDialog()
+                            },
+                            onDismiss = viewModel::dismissAddDialog
+                        )
                     }
                 }
             }
