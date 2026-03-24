@@ -145,6 +145,7 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen(
                                 currentTheme = appTheme,
                                 isPremium = isPremium,
+                                proPrice = uiState.formattedPrice,
                                 wifiOnly = wifiOnly,
                                 maxConcurrent = maxConcurrent,
                                 connectionLimit = connectionLimit,
