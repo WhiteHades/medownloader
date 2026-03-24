@@ -18,7 +18,11 @@ data class Download(
     val errorMessage: String? = null
 ) {
     val progress: Float
-        get() = if (totalLength > 0) completedLength.toFloat() / totalLength else 0f
+        get() = if (totalLength > 0) {
+            (completedLength.toFloat() / totalLength).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
 
     val progressPercent: Int
         get() = (progress * 100).toInt()
@@ -33,7 +37,7 @@ data class Download(
         get() = status == DownloadStatus.ACTIVE
 
     val remainingBytes: Long
-        get() = totalLength - completedLength
+        get() = (totalLength - completedLength).coerceAtLeast(0)
 
     val etaSeconds: Long
         get() = if (downloadSpeed > 0) remainingBytes / downloadSpeed else 0

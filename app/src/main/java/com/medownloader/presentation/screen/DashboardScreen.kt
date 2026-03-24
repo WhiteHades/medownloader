@@ -520,14 +520,21 @@ private fun ExpressiveDownloadCard(
                         
                         // Progress %
                         Text(
-                            text = "${download.progressPercent}%",
+                            text = stringResource(
+                                R.string.dashboard_progress_percent_fmt,
+                                download.progressPercent
+                            ),
                             style = MonoTextStyleSmall,
                             fontWeight = FontWeight.Medium
                         )
                         
                         // Size
                         Text(
-                            text = "${formatSize(download.completedLength)} / ${formatSize(download.totalLength)}",
+                            text = stringResource(
+                                R.string.dashboard_size_progress_fmt,
+                                formatSize(download.completedLength),
+                                formatSize(download.totalLength)
+                            ),
                             style = MonoTextStyleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
