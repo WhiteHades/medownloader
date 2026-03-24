@@ -319,12 +319,23 @@ class MainViewModel(
     }
     
     private fun fetchOfferings() {
-         viewModelScope.launch {
-             premiumRepository.getLifetimePackage()
-                 .onSuccess { pkg ->
-                     _uiState.update { it.copy(formattedPrice = pkg.product.price.formatted) }
-                 }
-         }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isPricingLoading = true) }
+
+            premiumRepository.getLifetimePackage()
+                .onSuccess { pkg ->
+                    _uiState.update {
+                        it.copy(
+                            formattedPrice = pkg.product.price.formatted,
+                            isPricingLoading = false
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    Log.w(TAG, "Failed to load lifetime package", error)
+                    _uiState.update { it.copy(isPricingLoading = false) }
+                }
+        }
     }
     
     private fun isTorrentOrMagnet(url: String): Boolean {
@@ -393,6 +404,7 @@ data class MainUiState(
     val fileInfo: FileInfo? = null,
     // monetization state
     val formattedPrice: String = "$3.99",
+    val isPricingLoading: Boolean = true,
     val isPurchasing: Boolean = false,
     val purchaseError: String? = null
 )
