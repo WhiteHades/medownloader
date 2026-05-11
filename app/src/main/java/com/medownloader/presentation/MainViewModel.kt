@@ -5,8 +5,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.medownloader.data.model.Download
 import com.medownloader.data.model.Aria2GlobalStat
+import com.medownloader.data.engine.DownloadProgress
+import com.medownloader.data.engine.DownloadStatus
 import com.medownloader.data.repository.DownloadRepository
 import com.medownloader.data.repository.FileInfo
 import com.medownloader.data.repository.FreeTierLimits
@@ -361,8 +362,8 @@ class MainViewModel(
                     _uiState.update { state ->
                         state.copy(
                             downloads = downloads,
-                            activeDownloads = downloads.filter { it.isActive },
-                            completedDownloads = downloads.filter { it.isComplete }
+                            activeDownloads = downloads.filter { it.status == DownloadStatus.ACTIVE },
+                            completedDownloads = downloads.filter { it.status == DownloadStatus.COMPLETE }
                         )
                     }
                 }
@@ -393,9 +394,9 @@ class MainViewModel(
 // ============================================================================
 
 data class MainUiState(
-    val downloads: List<Download> = emptyList(),
-    val activeDownloads: List<Download> = emptyList(),
-    val completedDownloads: List<Download> = emptyList(),
+    val downloads: List<DownloadProgress> = emptyList(),
+    val activeDownloads: List<DownloadProgress> = emptyList(),
+    val completedDownloads: List<DownloadProgress> = emptyList(),
     val globalStats: Aria2GlobalStat? = null,
     val isAddingDownload: Boolean = false,
     val isLoadingFileInfo: Boolean = false,

@@ -3,7 +3,6 @@ package com.medownloader.data.repository
 import android.content.Context
 import android.util.Log
 import com.medownloader.data.engine.*
-import com.medownloader.data.model.Download
 import com.medownloader.data.model.Aria2GlobalStat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow

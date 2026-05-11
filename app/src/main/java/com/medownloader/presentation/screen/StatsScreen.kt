@@ -31,8 +31,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.medownloader.data.model.Download
-import com.medownloader.data.model.DownloadStatus
+import com.medownloader.data.engine.DownloadProgress
+import com.medownloader.data.engine.DownloadStatus
 import com.medownloader.ui.theme.*
 
 import com.medownloader.R
@@ -40,7 +40,7 @@ import com.medownloader.R
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun StatsScreen(
-    downloads: List<Download>,
+    downloads: List<DownloadProgress>,
     totalDownloaded: Long,
     averageSpeed: Long,
     onBackClick: () -> Unit,
@@ -654,7 +654,7 @@ private fun getFileTypeColor(type: String): Color {
     }
 }
 
-private fun calculateStats(downloads: List<Download>): DownloadStats {
+private fun calculateStats(downloads: List<DownloadProgress>): DownloadStats {
     val fileTypes = downloads.groupBy { 
         it.filename.substringAfterLast('.', "unknown")
     }.mapValues { it.value.size }

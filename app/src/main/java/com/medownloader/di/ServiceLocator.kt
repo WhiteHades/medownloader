@@ -2,6 +2,8 @@ package com.medownloader.di
 
 import android.content.Context
 import com.medownloader.data.Aria2RpcClient
+import com.medownloader.data.engine.Aria2Engine
+import com.medownloader.data.engine.YtDlpEngine
 import com.medownloader.data.repository.DownloadRepository
 import com.medownloader.data.repository.DownloadRepositoryImpl
 import com.medownloader.data.repository.PremiumRepository
@@ -9,35 +11,32 @@ import com.medownloader.data.repository.PremiumRepositoryImpl
 import com.medownloader.data.repository.SettingsRepository
 import com.medownloader.data.source.Aria2ProcessManager
 
-/**
- * Manual Dependency Injection container (Service Locator pattern).
- * 
- * Lightweight alternative to Hilt/Dagger for small apps.
- * Initialize in Application.onCreate()
- */
 object ServiceLocator {
-    
+
     @Volatile
     private var appContext: Context? = null
-    
+
     @Volatile
     private var processManager: Aria2ProcessManager? = null
-    
+
     @Volatile
     private var rpcClient: Aria2RpcClient? = null
-    
+
+    @Volatile
+    private var aria2Engine: Aria2Engine? = null
+
+    @Volatile
+    private var ytDlpEngine: YtDlpEngine? = null
+
     @Volatile
     private var downloadRepository: DownloadRepository? = null
-    
+
     @Volatile
     private var premiumRepository: PremiumRepository? = null
 
     @Volatile
     private var settingsRepository: SettingsRepository? = null
 
-    /**
-     * Initialize with application context. Call from Application.onCreate()
-     */
     fun initialize(context: Context) {
         appContext = context.applicationContext
     }
@@ -60,11 +59,28 @@ object ServiceLocator {
         }
     }
 
+    fun provideAria2Engine(): Aria2Engine {
+        return aria2Engine ?: synchronized(this) {
+            aria2Engine ?: Aria2Engine(
+                rpcClient = provideRpcClient(),
+                processManager = provideProcessManager()
+            ).also { aria2Engine = it }
+        }
+    }
+
+    fun provideYtDlpEngine(): YtDlpEngine {
+        return ytDlpEngine ?: synchronized(this) {
+            ytDlpEngine ?: YtDlpEngine(
+                aria2ProcessManager = provideProcessManager()
+            ).also { ytDlpEngine = it }
+        }
+    }
+
     fun provideDownloadRepository(): DownloadRepository {
         return downloadRepository ?: synchronized(this) {
             downloadRepository ?: DownloadRepositoryImpl(
-                rpcClient = provideRpcClient(),
-                processManager = provideProcessManager(),
+                primaryEngine = provideYtDlpEngine(),
+                fallbackEngine = provideAria2Engine(),
                 context = requireNotNull(appContext)
             ).also { downloadRepository = it }
         }
@@ -86,13 +102,12 @@ object ServiceLocator {
         }
     }
 
-    /**
-     * Reset all dependencies. Used for testing.
-     */
     fun reset() {
         synchronized(this) {
             processManager = null
             rpcClient = null
+            aria2Engine = null
+            ytDlpEngine = null
             downloadRepository = null
             premiumRepository = null
             settingsRepository = null

@@ -36,8 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.medownloader.R
-import com.medownloader.data.model.Download
-import com.medownloader.data.model.DownloadStatus
+import com.medownloader.data.engine.DownloadProgress
+import com.medownloader.data.engine.DownloadStatus
 import com.medownloader.presentation.MainUiState
 import com.medownloader.ui.theme.*
 
@@ -407,7 +407,7 @@ private fun SectionHeader(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ExpressiveDownloadCard(
-    download: Download,
+    download: DownloadProgress,
     isActive: Boolean,
     onPauseClick: () -> Unit,
     onResumeClick: () -> Unit,
@@ -756,15 +756,15 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun getStatusText(download: Download): String {
+private fun getStatusText(download: DownloadProgress): String {
     return when (download.status) {
         DownloadStatus.ACTIVE -> if (download.downloadSpeed > 0) {
             stringResource(R.string.status_eta_fmt, formatEta(download.etaSeconds))
         } else stringResource(R.string.status_connecting)
         DownloadStatus.PAUSED -> stringResource(R.string.status_paused)
-        DownloadStatus.WAITING -> stringResource(R.string.status_waiting)
+        DownloadStatus.QUEUED -> stringResource(R.string.status_waiting)
         DownloadStatus.COMPLETE -> stringResource(R.string.status_completed)
         DownloadStatus.ERROR -> download.errorMessage ?: stringResource(R.string.status_error)
-        DownloadStatus.REMOVED -> stringResource(R.string.status_removed)
+        DownloadStatus.STOPPED -> stringResource(R.string.status_removed)
     }
 }
