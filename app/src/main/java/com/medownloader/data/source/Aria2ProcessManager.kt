@@ -2,6 +2,7 @@ package com.medownloader.data.source
 
 import android.content.Context
 import android.util.Log
+import com.medownloader.data.repository.SettingsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +16,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
 
-class Aria2ProcessManager(private val context: Context) {
+class Aria2ProcessManager(
+    private val context: Context,
+    private val settingsRepository: SettingsRepository? = null
+) {
 
     companion object {
         private const val TAG = "Aria2ProcessManager"
@@ -75,6 +79,13 @@ class Aria2ProcessManager(private val context: Context) {
             val serverStatFile = File(downloadDir, ".aria2-server-stats")
             val userAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
+            val settings = settingsRepository
+            val maxConnections = if (settings != null) runBlocking { settings.connectionLimit.first() } else 4
+            val splitCount = if (settings != null) runBlocking { settings.splitCount.first() } else 8
+            val dnsServers = if (settings != null) runBlocking { settings.dnsServers.first() } else "8.8.8.8,8.8.4.4,1.1.1.1"
+            val enableDht = if (settings != null) runBlocking { settings.enableDht.first() } else true
+            val diskCacheMb = if (settings != null) runBlocking { settings.diskCacheMb.first() } else 32
+
             val command = mutableListOf(
                 binaryPath,
                 "--enable-rpc=true",
@@ -94,8 +105,8 @@ class Aria2ProcessManager(private val context: Context) {
                 "--force-save=true",
                 "--auto-save-interval=60",
                 "--max-concurrent-downloads=5",
-                "--max-connection-per-server=4",
-                "--split=8",
+                "--max-connection-per-server=$maxConnections",
+                "--split=$splitCount",
                 "--min-split-size=5M",
                 "--continue=true",
                 "--always-resume=true",
@@ -112,13 +123,13 @@ class Aria2ProcessManager(private val context: Context) {
                 "--server-stat-if=${serverStatFile.absolutePath}",
                 "--server-stat-timeout=86400",
                 "--file-allocation=falloc",
-                "--disk-cache=32M",
+                "--disk-cache=${diskCacheMb}M",
                 "--auto-file-renaming=true",
                 "--allow-overwrite=false",
                 "--remote-time=true",
                 "--conditional-get=true",
-                "--enable-dht=true",
-                "--enable-dht6=true",
+                "--enable-dht=$enableDht",
+                "--enable-dht6=$enableDht",
                 "--dht-file-path=${File(downloadDir, ".aria2-dht.dat").absolutePath}",
                 "--dht-file-path6=${File(downloadDir, ".aria2-dht6.dat").absolutePath}",
                 "--enable-peer-exchange=true",
@@ -131,7 +142,7 @@ class Aria2ProcessManager(private val context: Context) {
                 "--follow-torrent=true",
                 "--follow-metalink=true",
                 "--async-dns=true",
-                "--async-dns-server=8.8.8.8,8.8.4.4,1.1.1.1",
+                "--async-dns-server=$dnsServers",
                 "--console-log-level=notice",
                 "--log-level=notice",
                 "--daemon=false",

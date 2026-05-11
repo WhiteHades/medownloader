@@ -44,7 +44,8 @@ object ServiceLocator {
     fun provideProcessManager(): Aria2ProcessManager {
         return processManager ?: synchronized(this) {
             processManager ?: Aria2ProcessManager(
-                requireNotNull(appContext) { "ServiceLocator not initialized" }
+                context = requireNotNull(appContext) { "ServiceLocator not initialized" },
+                settingsRepository = provideSettingsRepository()
             ).also { processManager = it }
         }
     }
