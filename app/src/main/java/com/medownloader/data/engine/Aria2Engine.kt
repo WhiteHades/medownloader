@@ -4,10 +4,9 @@ import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.source.Aria2ProcessManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.flow
-import java.io.IOException
-import java.net.ConnectException
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 
 class Aria2Engine(
     private val rpcClient: Aria2RpcClient,
@@ -143,5 +142,21 @@ class Aria2Engine(
             return false
         }
         return rpcClient.getVersion().isSuccess
+    }
+
+    fun observeAll(eventDriven: Boolean = true): Flow<List<DownloadProgress>> {
+        val pollingFlow = flow {
+            while (true) {
+                emit(queryAll())
+                delay(1000)
+            }
+        }
+
+        return if (eventDriven) {
+            val eventsFlow = rpcClient.observeDownloadEvents().map { queryAll() }
+            merge(pollingFlow, eventsFlow)
+        } else {
+            pollingFlow
+        }
     }
 }

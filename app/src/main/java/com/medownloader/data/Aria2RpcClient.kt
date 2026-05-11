@@ -11,6 +11,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okhttp3.Response as WsResponse
 import java.util.concurrent.TimeUnit
 import android.util.Base64
 
@@ -573,6 +576,46 @@ class Aria2RpcClient(
         while (true) {
             getGlobalStat().onSuccess { emit(it) }
             delay(intervalMs)
+        }
+    }
+
+    // ========================================================================
+    // WebSocket Event Listener (push-driven updates)
+    // ========================================================================
+
+    fun observeDownloadEvents(): Flow<Unit> = flow {
+        val wsUrl = rpcUrl
+            .replace("http://", "ws://")
+            .replace("https://", "wss://")
+            .replace("http:", "ws:")   // handle 'http:' prefix variants
+
+        val request = Request.Builder()
+            .url(wsUrl)
+            .build()
+
+        try {
+            val socket = client.newWebSocket(request, object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: WsResponse) {
+                    // No handshake needed; broadcast notifications arrive automatically
+                }
+
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    if (text.contains("\"method\"")) {
+                        try {
+                            emit(Unit)
+                        } catch (_: Exception) {}
+                    }
+                }
+
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: WsResponse?) {
+                    // WebSocket failed — caller falls back to polling
+                }
+            })
+
+            kotlinx.coroutines.delay(3600_000) // keep connection alive for 1 hour
+            socket.close(1000, "idle")
+        } catch (e: Exception) {
+            // Fall back to polling silently
         }
     }
 
