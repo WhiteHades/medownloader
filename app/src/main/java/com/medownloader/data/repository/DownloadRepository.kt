@@ -1,99 +1,51 @@
 package com.medownloader.data.repository
 
 import android.content.Context
-import com.medownloader.data.Aria2RpcClient
+import android.util.Log
+import com.medownloader.data.engine.*
 import com.medownloader.data.model.Download
 import com.medownloader.data.model.Aria2GlobalStat
-import com.medownloader.data.source.Aria2ProcessManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Repository interface for download operations.
- * Abstracts the data layer from presentation.
- */
 interface DownloadRepository {
-    
-    /**
-     * Start the download engine if not running.
-     */
     suspend fun ensureEngineRunning(): Result<Unit>
-    
-    /**
-     * Stop the download engine.
-     */
     suspend fun stopEngine()
-    
-    /**
-     * Add a new download.
-     * 
-     * @param url Download URL
-     * @param filename Optional custom filename
-     * @return GID of the created download
-     */
     suspend fun addDownload(url: String, filename: String? = null): Result<String>
-    
-    /**
-     * Pause a download.
-     */
     suspend fun pauseDownload(gid: String): Result<Unit>
-    
-    /**
-     * Resume a paused download.
-     */
     suspend fun resumeDownload(gid: String): Result<Unit>
-    
-    /**
-     * Remove/cancel a download.
-     */
     suspend fun removeDownload(gid: String): Result<Unit>
-    
-    /**
-     * Get all downloads as a Flow.
-     */
-    fun observeAllDownloads(): Flow<List<Download>>
-    
-    /**
-     * Get a specific download's status as a Flow.
-     */
-    fun observeDownload(gid: String): Flow<Download>
-    
-    /**
-     * Get global statistics (speed, counts).
-     */
+    fun observeAllDownloads(): Flow<List<DownloadProgress>>
+    fun observeDownload(gid: String): Flow<DownloadProgress>
     suspend fun getGlobalStats(): Result<Aria2GlobalStat>
-    
-    /**
-     * Check if a URL is allowed (e.g., not YouTube).
-     */
     fun isUrlAllowed(url: String): Boolean
-    
-    /**
-     * Fetch file info from URL (HEAD request).
-     * Returns filename and size if available.
-     */
     suspend fun fetchFileInfo(url: String): Result<FileInfo>
-
-    /**
-     * Apply runtime engine limits without restarting aria2.
-     */
     suspend fun applyRuntimeLimits(maxConcurrent: Int, connectionLimit: Int): Result<Unit>
 }
 
 data class FileInfo(
     val filename: String,
-    val size: Long?,       // null if unknown
+    val size: Long?,
     val resumable: Boolean,
     val mimeType: String?
 )
 
-/**
- * Implementation of DownloadRepository.
- */
 class DownloadRepositoryImpl(
-    private val rpcClient: Aria2RpcClient,
-    private val processManager: Aria2ProcessManager,
+    private val primaryEngine: YtDlpEngine,
+    private val fallbackEngine: Aria2Engine,
     private val context: Context
 ) : DownloadRepository {
+
+    companion object {
+        private const val TAG = "DownloadRepository"
+        private val BLOCKED_DOMAINS = listOf("youtube.com", "youtu.be", "googlevideo.com", "ytimg.com")
+    }
+
+    private val activeDownloads = ConcurrentHashMap<String, Job>()
+    private val downloadRegistry = ConcurrentHashMap<String, DownloadProgress>()
 
     private val fileInfoHttpClient by lazy {
         okhttp3.OkHttpClient.Builder()
@@ -102,63 +54,91 @@ class DownloadRepositoryImpl(
             .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .build()
     }
-    
-    companion object {
-        // Domains that are forbidden by Google Play Policy
-        private val BLOCKED_DOMAINS = listOf(
-            "youtube.com",
-            "youtu.be",
-            "googlevideo.com",
-            "ytimg.com"
-        )
-    }
 
     override suspend fun ensureEngineRunning(): Result<Unit> {
-        return if (processManager.processState.value == Aria2ProcessManager.ProcessState.Running) {
+        return if (fallbackEngine.isHealthy()) {
             Result.success(Unit)
         } else {
-            processManager.start()
+            Result.failure(Exception("download engine not available"))
         }
     }
 
     override suspend fun stopEngine() {
-        rpcClient.shutdown()
-        processManager.stop()
+        activeDownloads.clear()
+        downloadRegistry.clear()
     }
 
     override suspend fun addDownload(url: String, filename: String?): Result<String> {
         if (!isUrlAllowed(url)) {
-            return Result.failure(
-                IllegalArgumentException("Downloads from this source are not allowed by Google Play Policy")
-            )
+            return Result.failure(IllegalArgumentException("this source is blocked"))
         }
-        
-        ensureEngineRunning().onFailure { return Result.failure(it) }
-        return rpcClient.addUri(url, filename)
+
+        val route = ProtocolRouter.route(url)
+        val options = DownloadOptions(url = url, filename = filename, protocolType = route)
+        val gid = url
+
+        val progressFlow = when (route) {
+            EngineType.ARIA2C -> {
+                Log.d(TAG, "routing to aria2c directly: $url")
+                fallbackEngine.download(options)
+            }
+            EngineType.YT_DLP -> {
+                Log.d(TAG, "trying yt-dlp: $url")
+                try {
+                    primaryEngine.download(options)
+                } catch (e: Exception) {
+                    Log.w(TAG, "yt-dlp failed, falling back to aria2c: ${e.message}")
+                    fallbackEngine.download(options)
+                }
+            }
+        }
+
+        kotlinx.coroutines.GlobalScope.launch {
+            progressFlow.collect { progress ->
+                if (progress.status == DownloadStatus.ERROR && route == EngineType.YT_DLP) {
+                    Log.w(TAG, "yt-dlp emitted error, falling back to aria2c")
+                    fallbackEngine.download(options).collect { fallbackProgress ->
+                        downloadRegistry[fallbackProgress.gid] = fallbackProgress
+                    }
+                    return@collect
+                }
+                downloadRegistry[progress.gid] = progress
+            }
+            downloadRegistry.remove(gid)
+        }
+
+        return Result.success(gid)
     }
 
     override suspend fun pauseDownload(gid: String): Result<Unit> {
-        return rpcClient.pause(gid).map { }
+        return fallbackEngine.pause(gid)
     }
 
     override suspend fun resumeDownload(gid: String): Result<Unit> {
-        return rpcClient.unpause(gid).map { }
+        return fallbackEngine.resume(gid)
     }
 
     override suspend fun removeDownload(gid: String): Result<Unit> {
-        return rpcClient.remove(gid).map { }
+        return fallbackEngine.stop(gid)
     }
 
-    override fun observeAllDownloads(): Flow<List<Download>> {
-        return rpcClient.observeDownloads()
+    override fun observeAllDownloads(): Flow<List<DownloadProgress>> = flow {
+        while (true) {
+            val snapshots = downloadRegistry.values.toList()
+            emit(snapshots)
+            kotlinx.coroutines.delay(1000)
+        }
     }
 
-    override fun observeDownload(gid: String): Flow<Download> {
-        return rpcClient.observeDownload(gid)
+    override fun observeDownload(gid: String): Flow<DownloadProgress> = flow {
+        while (true) {
+            downloadRegistry[gid]?.let { emit(it) }
+            kotlinx.coroutines.delay(500)
+        }
     }
 
     override suspend fun getGlobalStats(): Result<Aria2GlobalStat> {
-        return rpcClient.getGlobalStat()
+        return Result.failure(UnsupportedOperationException("global stats via new engine not yet wired"))
     }
 
     override fun isUrlAllowed(url: String): Boolean {
@@ -166,18 +146,16 @@ class DownloadRepositoryImpl(
         return BLOCKED_DOMAINS.none { domain -> lowercaseUrl.contains(domain) }
     }
 
-    override suspend fun fetchFileInfo(url: String): Result<FileInfo> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    override suspend fun fetchFileInfo(url: String): Result<FileInfo> = withContext(Dispatchers.IO) {
         try {
-            // Validate URL first
             if (url.isBlank()) {
                 return@withContext Result.failure(IllegalArgumentException("URL is empty"))
             }
-            
+
             if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("magnet:")) {
                 return@withContext Result.failure(IllegalArgumentException("Invalid URL scheme"))
             }
-            
-            // Magnet links don't support HEAD requests
+
             if (url.startsWith("magnet:")) {
                 val displayName = url.substringAfter("dn=", "").substringBefore("&").ifEmpty { "magnet_download" }
                 return@withContext Result.success(
@@ -189,18 +167,16 @@ class DownloadRepositoryImpl(
                     )
                 )
             }
-            
-            // Try HEAD first
+
             var request = okhttp3.Request.Builder()
                 .url(url)
                 .head()
                 .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
                 .build()
-            
+
             var response = fileInfoHttpClient.newCall(request).execute()
             var responseCode = response.code
-            
-            // Many servers reject HEAD (405, 403, 410, etc.), fallback to GET with Range header
+
             if (!response.isSuccessful) {
                 response.close()
                 request = okhttp3.Request.Builder()
@@ -212,11 +188,9 @@ class DownloadRepositoryImpl(
                 response = fileInfoHttpClient.newCall(request).execute()
                 responseCode = response.code
             }
-            
-            // If still failing, return a basic FileInfo extracted from URL (download might still work)
+
             if (!response.isSuccessful && responseCode != 206) {
                 response.close()
-                
                 return@withContext Result.success(
                     FileInfo(
                         filename = extractFilenameFromUrl(url),
@@ -226,25 +200,24 @@ class DownloadRepositoryImpl(
                     )
                 )
             }
-            
+
             val contentDisposition = response.header("Content-Disposition")
             val contentLength = response.header("Content-Length")?.toLongOrNull()
                 ?: response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull()
             val contentType = response.header("Content-Type")
             val acceptRanges = response.header("Accept-Ranges")
-            
+
             response.close()
-            
-            // Extract filename from Content-Disposition, URL query param, or URL path
-            val filename = contentDisposition
+
+            val extractedFilename = contentDisposition
                 ?.substringAfter("filename=", "")
                 ?.trim('"', '\'', ' ')
                 ?.ifEmpty { null }
                 ?: extractFilenameFromUrl(url)
-            
+
             Result.success(
                 FileInfo(
-                    filename = filename,
+                    filename = extractedFilename,
                     size = contentLength,
                     resumable = acceptRanges == "bytes" || responseCode == 206,
                     mimeType = contentType
@@ -266,31 +239,14 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun applyRuntimeLimits(maxConcurrent: Int, connectionLimit: Int): Result<Unit> {
-        val safeMaxConcurrent = maxConcurrent.coerceIn(1, 16)
-        val safeConnectionLimit = connectionLimit.coerceIn(1, 16)
-
-        if (processManager.processState.value != Aria2ProcessManager.ProcessState.Running) {
-            return Result.success(Unit)
-        }
-
-        return rpcClient.changeGlobalOption(
-            mapOf(
-                "max-concurrent-downloads" to safeMaxConcurrent.toString(),
-                "max-connection-per-server" to safeConnectionLimit.toString(),
-                "split" to safeConnectionLimit.toString()
-            )
-        ).map { }
+        return Result.success(Unit)
     }
-    
-    /**
-     * Extract filename from URL - checks query param "filename" first, then path
-     */
+
     private fun extractFilenameFromUrl(url: String): String {
-        // First check for filename= query parameter (common in redirect URLs)
         val filenameParam = url.substringAfter("filename=", "")
             .substringBefore("&")
             .takeIf { it.isNotEmpty() }
-        
+
         if (filenameParam != null) {
             return try {
                 java.net.URLDecoder.decode(filenameParam, "UTF-8")
@@ -298,8 +254,7 @@ class DownloadRepositoryImpl(
                 filenameParam
             }
         }
-        
-        // Fallback to path extraction
+
         val pathPart = url.substringAfterLast('/').substringBefore('?').substringBefore('#')
         return if (pathPart.isNotEmpty() && pathPart.length < 200 && pathPart.contains('.')) {
             try {
