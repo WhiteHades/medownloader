@@ -81,6 +81,11 @@ class Aria2ProcessManager(
             val serverStatFile = File(downloadDir, ".aria2-server-stats")
             val userAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
+            if (!serverStatFile.exists()) {
+                serverStatFile.createNewFile()
+                Log.d(TAG, "Created new server stat file: ${serverStatFile.absolutePath}")
+            }
+
             val settings = settingsRepository
             val maxConnections = if (settings != null) runBlocking { settings.connectionLimit.first() } else 4
             val splitCount = if (settings != null) runBlocking { settings.splitCount.first() } else 8

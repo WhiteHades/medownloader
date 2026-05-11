@@ -82,6 +82,8 @@ object ServiceLocator {
             downloadRepository ?: DownloadRepositoryImpl(
                 primaryEngine = provideYtDlpEngine(),
                 fallbackEngine = provideAria2Engine(),
+                rpcClient = provideRpcClient(),
+                processManager = provideProcessManager(),
                 context = requireNotNull(appContext)
             ).also { downloadRepository = it }
         }

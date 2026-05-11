@@ -27,7 +27,7 @@ class MeDownloaderApp : Application() {
             }
             val py = Python.getInstance()
             val ytdlp = py.getModule("yt_dlp.version")
-            val version = ytdlp.callAttr("__version__").toString()
+            val version = ytdlp.get("__version__").toString()
             Log.i(TAG, "yt-dlp $version ready")
         } catch (e: Exception) {
             Log.w(TAG, "python runtime unavailable: ${e.message}")

@@ -2,8 +2,10 @@ package com.medownloader.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.engine.*
 import com.medownloader.data.model.Aria2GlobalStat
+import com.medownloader.data.source.Aria2ProcessManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
@@ -39,6 +41,8 @@ data class FileInfo(
 class DownloadRepositoryImpl(
     private val primaryEngine: YtDlpEngine,
     private val fallbackEngine: Aria2Engine,
+    private val rpcClient: Aria2RpcClient,
+    private val processManager: Aria2ProcessManager,
     private val context: Context
 ) : DownloadRepository {
 
@@ -59,14 +63,16 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun ensureEngineRunning(): Result<Unit> {
-        return if (fallbackEngine.isHealthy()) {
+        return if (processManager.processState.value == Aria2ProcessManager.ProcessState.Running) {
             Result.success(Unit)
         } else {
-            Result.failure(Exception("download engine not available"))
+            processManager.start()
         }
     }
 
     override suspend fun stopEngine() {
+        rpcClient.shutdown()
+        processManager.stop()
         activeDownloads.clear()
         downloadRegistry.clear()
     }
@@ -79,6 +85,8 @@ class DownloadRepositoryImpl(
         val route = ProtocolRouter.route(url)
         val options = DownloadOptions(url = url, filename = filename, protocolType = route)
         val gid = url
+
+        ensureEngineRunning().onFailure { return Result.failure(it) }
 
         val progressFlow = when (route) {
             EngineType.ARIA2C -> {
@@ -107,7 +115,6 @@ class DownloadRepositoryImpl(
                 }
                 downloadRegistry[progress.gid] = progress
             }
-            downloadRegistry.remove(gid)
         }
 
         return Result.success(gid)
@@ -141,7 +148,7 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun getGlobalStats(): Result<Aria2GlobalStat> {
-        return Result.failure(UnsupportedOperationException("global stats via new engine not yet wired"))
+        return rpcClient.getGlobalStat()
     }
 
     override fun isUrlAllowed(url: String): Boolean {
@@ -242,7 +249,20 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun applyRuntimeLimits(maxConcurrent: Int, connectionLimit: Int): Result<Unit> {
-        return Result.success(Unit)
+        val safeMaxConcurrent = maxConcurrent.coerceIn(1, 16)
+        val safeConnectionLimit = connectionLimit.coerceIn(1, 16)
+
+        if (processManager.processState.value != Aria2ProcessManager.ProcessState.Running) {
+            return Result.success(Unit)
+        }
+
+        return rpcClient.changeGlobalOption(
+            mapOf(
+                "max-concurrent-downloads" to safeMaxConcurrent.toString(),
+                "max-connection-per-server" to safeConnectionLimit.toString(),
+                "split" to safeConnectionLimit.toString()
+            )
+        ).map { }
     }
 
     private fun extractFilenameFromUrl(url: String): String {
