@@ -127,31 +127,57 @@
 
     <!-- Stats Screen -->
     <string name="stats_title">statistics</string>
-    <string name="stats_overview">overview</string>
-    <string name="stats_overview_subtitle">live queue plus long-term download history</string>
-    <string name="stats_total">total</string>
-    <string name="stats_completed_total">completed</string>
-    <string name="stats_downloaded">downloaded</string>
-    <string name="stats_status_distribution">download status</string>
-    <string name="stats_failed">failed</string>
-    <string name="stats_speed_analysis">speed analysis</string>
-    <string name="stats_average">average</string>
-    <string name="stats_peak">peak</string>
-    <string name="stats_speed_history">recent speed history</string>
-    <string name="stats_file_types">file types</string>
-    <string name="stats_recent_performance">recent performance</string>
-    <string name="stats_recent_history">recent history</string>
-    <string name="stats_recent_history_subtitle">the latest completed or failed downloads saved on this device</string>
-    <string name="stats_history_trend">history trend</string>
-    <string name="stats_history_trend_subtitle">daily completed download volume across your saved history</string>
-    <string name="stats_live_queue">live queue</string>
-    <string name="stats_live_queue_subtitle">what is active right now in this app session</string>
-    <string name="stats_live_count_fmt">%1$d live</string>
-    <string name="stats_empty_history">no history yet</string>
-    <string name="stats_empty_history_subtitle">completed and failed downloads will start showing up here automatically</string>
     <string name="stats_clear_history">clear history</string>
-    <string name="stats_files_suffix">%1$d files</string>
-    <string name="stats_unknown_type">unknown</string>
+
+    <!-- Hero card -->
+    <string name="stats_hero_label">total downloaded</string>
+    <string name="stats_hero_count_fmt">across %1$d completed downloads</string>
+    <string name="stats_hero_count_zero">no completed downloads yet</string>
+    <string name="stats_trend_up_fmt">+%1$s vs prior period</string>
+    <string name="stats_trend_down_fmt">-%1$s vs prior period</string>
+    <string name="stats_trend_flat">no change vs prior period</string>
+    <string name="stats_trend_content_desc">period comparison</string>
+
+    <!-- Time range -->
+    <string name="stats_range_7d">7d</string>
+    <string name="stats_range_30d">30d</string>
+    <string name="stats_range_all">all</string>
+
+    <!-- Metric grid -->
+    <string name="stats_metric_completed">completed</string>
+    <string name="stats_metric_failed">failed</string>
+    <string name="stats_metric_avg_speed">avg speed</string>
+    <string name="stats_metric_peak_speed">peak speed</string>
+
+    <!-- Status breakdown -->
+    <string name="stats_status_title">status breakdown</string>
+    <string name="stats_status_completed">completed</string>
+    <string name="stats_status_failed">failed</string>
+    <string name="stats_status_active">active</string>
+    <string name="stats_status_empty">no downloads in this range</string>
+
+    <!-- Volume chart -->
+    <string name="stats_volume_title">daily volume</string>
+    <string name="stats_volume_subtitle_fmt">total bytes completed per day · peak %1$s</string>
+    <string name="stats_volume_empty">no completed downloads in this range yet</string>
+
+    <!-- Activity heatmap -->
+    <string name="stats_activity_title">activity</string>
+    <string name="stats_activity_subtitle">last 12 weeks · darker = more downloads</string>
+    <string name="stats_activity_legend_less">less</string>
+    <string name="stats_activity_legend_more">more</string>
+
+    <!-- File types -->
+    <string name="stats_file_types_title">file types</string>
+    <string name="stats_file_types_subtitle">by count across all completed downloads</string>
+    <string name="stats_file_types_empty">file types will appear once downloads finish</string>
+    <string name="stats_file_types_count_fmt">%1$d</string>
+
+    <!-- Recent history -->
+    <string name="stats_history_title">recent history</string>
+    <string name="stats_history_subtitle">the latest completed or failed downloads</string>
+    <string name="stats_history_empty_title">no history yet</string>
+    <string name="stats_history_empty_subtitle">finished downloads appear here automatically</string>
 
     <string name="common_done">done</string>
     <string name="price_lifetime_fmt">%1$s</string>
