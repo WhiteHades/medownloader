@@ -4,7 +4,10 @@ import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.source.Aria2ProcessManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.flow
+import java.io.IOException
+import java.net.ConnectException
 
 class Aria2Engine(
     private val rpcClient: Aria2RpcClient,
@@ -12,6 +15,8 @@ class Aria2Engine(
 ) : DownloadEngine {
 
     override suspend fun download(options: DownloadOptions): Flow<DownloadProgress> = flow {
+        var failCount = 0
+
         val result = rpcClient.addUri(options.url, options.filename)
         if (result.isFailure) {
             emit(DownloadProgress(
@@ -29,36 +34,70 @@ class Aria2Engine(
         val gid = result.getOrThrow()
 
         while (true) {
-            val status = rpcClient.tellStatus(gid)
-            if (status.isFailure) {
+            try {
+                val status = rpcClient.tellStatus(gid)
+                if (status.isFailure) {
+                    failCount++
+                    if (failCount > 3) {
+                        emit(DownloadProgress(
+                            gid = gid,
+                            status = DownloadStatus.ERROR,
+                            filename = options.filename ?: options.url,
+                            downloadedBytes = 0,
+                            totalBytes = 0,
+                            speed = 0,
+                            eta = 0,
+                            errorMessage = "connection lost after $failCount retries"
+                        ))
+                        return@flow
+                    }
+                    delay(1000L * failCount.coerceAtMost(5))
+                    continue
+                }
+
+                failCount = 0
+
+                val download = status.getOrThrow()
+                val engineStatus = when {
+                    download.isComplete -> DownloadStatus.COMPLETE
+                    download.isPaused -> DownloadStatus.PAUSED
+                    download.isActive -> DownloadStatus.ACTIVE
+                    download.isStopped -> DownloadStatus.STOPPED
+                    else -> DownloadStatus.QUEUED
+                }
+
+                emit(DownloadProgress(
+                    gid = download.gid,
+                    status = engineStatus,
+                    filename = download.filename,
+                    downloadedBytes = download.completedLength,
+                    totalBytes = download.totalLength,
+                    speed = download.downloadSpeed,
+                    eta = download.eta
+                ))
+
+                if (engineStatus == DownloadStatus.COMPLETE || engineStatus == DownloadStatus.STOPPED) {
+                    break
+                }
+
                 delay(500)
-                continue
+            } catch (e: Exception) {
+                failCount++
+                if (failCount > 3) {
+                    emit(DownloadProgress(
+                        gid = gid,
+                        status = DownloadStatus.ERROR,
+                        filename = options.filename ?: options.url,
+                        downloadedBytes = 0,
+                        totalBytes = 0,
+                        speed = 0,
+                        eta = 0,
+                        errorMessage = "fatal error: ${e.message}"
+                    ))
+                    return@flow
+                }
+                delay(1000L * failCount.coerceAtMost(5))
             }
-
-            val download = status.getOrThrow()
-            val engineStatus = when {
-                download.isComplete -> DownloadStatus.COMPLETE
-                download.isPaused -> DownloadStatus.PAUSED
-                download.isActive -> DownloadStatus.ACTIVE
-                download.isStopped -> DownloadStatus.STOPPED
-                else -> DownloadStatus.QUEUED
-            }
-
-            emit(DownloadProgress(
-                gid = download.gid,
-                status = engineStatus,
-                filename = download.filename,
-                downloadedBytes = download.completedLength,
-                totalBytes = download.totalLength,
-                speed = download.downloadSpeed,
-                eta = download.eta
-            ))
-
-            if (engineStatus == DownloadStatus.COMPLETE || engineStatus == DownloadStatus.STOPPED) {
-                break
-            }
-
-            delay(500)
         }
     }
 
