@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
-    // id("com.chaquo.python") — enable after building chaquopy runtime: see defaultConfig.ytdlpEnabled
+    id("com.chaquo.python")
 }
 
 android {
@@ -61,15 +61,14 @@ android {
     }
 }
 
-// Enable when id("com.chaquo.python") plugin is applied
-// chaquopy {
-//     defaultConfig {
-//         version = "3.10"
-//         pip {
-//             install("yt-dlp")
-//         }
-//     }
-// }
+chaquopy {
+    defaultConfig {
+        version = "3.10"
+        pip {
+            install("yt-dlp")
+        }
+    }
+}
 
 dependencies {
     // Core Android

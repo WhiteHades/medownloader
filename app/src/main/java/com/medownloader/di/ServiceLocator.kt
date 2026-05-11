@@ -71,7 +71,9 @@ object ServiceLocator {
 
     fun provideYtDlpEngine(): YtDlpEngine {
         return ytDlpEngine ?: synchronized(this) {
-            ytDlpEngine ?: YtDlpEngine().also { ytDlpEngine = it }
+            ytDlpEngine ?: YtDlpEngine(
+                aria2ProcessManager = provideProcessManager()
+            ).also { ytDlpEngine = it }
         }
     }
 
