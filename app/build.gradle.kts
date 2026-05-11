@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.chaquo.python")
 }
 
 android {
@@ -24,6 +25,14 @@ android {
         // include all ABIs for aria2c binary
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        }
+
+        // Chaquopy python configuration
+        python {
+            version = "3.12"
+            pip {
+                install("yt-dlp")
+            }
         }
     }
 
