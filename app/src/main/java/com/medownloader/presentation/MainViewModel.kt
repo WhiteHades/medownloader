@@ -65,7 +65,19 @@ class MainViewModel(
         
     val connectionLimit = settingsRepository.connectionLimit
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 4)
-        
+
+    val splitCount = settingsRepository.splitCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 8)
+
+    val enableDht = settingsRepository.enableDht
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val dnsServers = settingsRepository.dnsServers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "8.8.8.8,8.8.4.4,1.1.1.1")
+
+    val diskCacheMb = settingsRepository.diskCacheMb
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 32)
+
     val downloadDirUri = settingsRepository.downloadDirUri
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -265,6 +277,30 @@ class MainViewModel(
     fun updateDownloadDir(uriString: String) {
         viewModelScope.launch {
             settingsRepository.setDownloadDirUri(uriString)
+        }
+    }
+
+    fun updateSplitCount(count: Int) {
+        viewModelScope.launch {
+            settingsRepository.setSplitCount(count.coerceIn(1, 32))
+        }
+    }
+
+    fun updateEnableDht(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setEnableDht(enabled)
+        }
+    }
+
+    fun updateDnsServers(servers: String) {
+        viewModelScope.launch {
+            settingsRepository.setDnsServers(servers.ifEmpty { "8.8.8.8,8.8.4.4,1.1.1.1" })
+        }
+    }
+
+    fun updateDiskCacheMb(mb: Int) {
+        viewModelScope.launch {
+            settingsRepository.setDiskCacheMb(mb.coerceIn(4, 128))
         }
     }
     

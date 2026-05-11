@@ -37,11 +37,17 @@ fun SettingsScreen(
     wifiOnly: Boolean,
     maxConcurrent: Int,
     connectionLimit: Int,
+    splitCount: Int,
+    enableDht: Boolean,
+    diskCacheMb: Int,
     downloadPath: String,
     onThemeSelected: (AppTheme) -> Unit,
     onWifiOnlyChanged: (Boolean) -> Unit,
     onMaxConcurrentChanged: (Int) -> Unit,
     onConnectionLimitChanged: (Int) -> Unit,
+    onSplitCountChanged: (Int) -> Unit,
+    onEnableDhtChanged: (Boolean) -> Unit,
+    onDiskCacheMbChanged: (Int) -> Unit,
     onDownloadPathClick: () -> Unit,
     onBackClick: () -> Unit,
     onGetProClick: () -> Unit,
@@ -51,6 +57,8 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showConnectionsDialog by remember { mutableStateOf(false) }
     var showConcurrentDialog by remember { mutableStateOf(false) }
+    var showSplitCountDialog by remember { mutableStateOf(false) }
+    var showDiskCacheDialog by remember { mutableStateOf(false) }
 
     val connectionCountText = stringResource(
         R.string.settings_connection_count_fmt,
@@ -202,6 +210,61 @@ fun SettingsScreen(
                 }
             }
             
+            // Engine Section
+            item {
+                SettingsSectionHeader(
+                    title = "Engine",
+                    icon = Icons.Outlined.Settings
+                )
+            }
+            
+            item {
+                SettingsCard {
+                    SettingsItem(
+                        icon = Icons.Outlined.GridOn,
+                        title = "Split count",
+                        subtitle = "$splitCount segments per download",
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            showSplitCountDialog = true
+                        },
+                        showChevron = true
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    SettingsItem(
+                        icon = Icons.Outlined.Dns,
+                        title = "Disk cache",
+                        subtitle = "$diskCacheMb MB",
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            showDiskCacheDialog = true
+                        },
+                        showChevron = true
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    SettingsItem(
+                        icon = if (enableDht) Icons.Outlined.Share else Icons.Outlined.Share,
+                        title = "DHT peer discovery",
+                        subtitle = if (enableDht) "enabled" else "disabled",
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            onEnableDhtChanged(!enableDht)
+                        },
+                        showChevron = false
+                    )
+                }
+            }
+            
             // About Section
             item {
                 SettingsSectionHeader(
@@ -300,23 +363,37 @@ fun SettingsScreen(
         )
     }
     
-    // Max Concurrent Downloads Dialog
-    if (showConcurrentDialog) {
+    // Split Count Dialog
+    if (showSplitCountDialog) {
         ConnectionsDialog(
-            title = stringResource(R.string.settings_max_concurrent),
-            subtitle = stringResource(R.string.settings_concurrent_subtitle),
-            currentValue = maxConcurrent,
-            isPremium = isPremium,
-            freeLimit = 4,
+            title = "Split count",
+            subtitle = "segments per download",
+            currentValue = splitCount,
+            isPremium = true,
+            freeLimit = 32,
             onValueSelected = { value ->
-                onMaxConcurrentChanged(value)
-                showConcurrentDialog = false
+                onSplitCountChanged(value)
+                showSplitCountDialog = false
             },
-            onUpgradeClick = {
-                showConcurrentDialog = false
-                onGetProClick()
+            onUpgradeClick = { showSplitCountDialog = false },
+            onDismiss = { showSplitCountDialog = false }
+        )
+    }
+
+    // Disk Cache Dialog
+    if (showDiskCacheDialog) {
+        ConnectionsDialog(
+            title = "Disk cache",
+            subtitle = "MB of memory cache",
+            currentValue = diskCacheMb,
+            isPremium = true,
+            freeLimit = 128,
+            onValueSelected = { value ->
+                onDiskCacheMbChanged(value)
+                showDiskCacheDialog = false
             },
-            onDismiss = { showConcurrentDialog = false }
+            onUpgradeClick = { showDiskCacheDialog = false },
+            onDismiss = { showDiskCacheDialog = false }
         )
     }
 }

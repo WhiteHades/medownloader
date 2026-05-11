@@ -56,6 +56,9 @@ class MainActivity : ComponentActivity() {
                 val wifiOnly by viewModel.wifiOnly.collectAsStateWithLifecycle()
                 val maxConcurrent by viewModel.maxConcurrent.collectAsStateWithLifecycle()
                 val connectionLimit by viewModel.connectionLimit.collectAsStateWithLifecycle()
+                val splitCount by viewModel.splitCount.collectAsStateWithLifecycle()
+                val enableDht by viewModel.enableDht.collectAsStateWithLifecycle()
+                val diskCacheMb by viewModel.diskCacheMb.collectAsStateWithLifecycle()
                 
                 val navController = rememberNavController()
                 val snackbarHostState = remember { SnackbarHostState() }
@@ -151,11 +154,17 @@ class MainActivity : ComponentActivity() {
                                 wifiOnly = wifiOnly,
                                 maxConcurrent = maxConcurrent,
                                 connectionLimit = connectionLimit,
+                                splitCount = splitCount,
+                                enableDht = enableDht,
+                                diskCacheMb = diskCacheMb,
                                 downloadPath = downloadDir ?: stringResource(R.string.settings_download_path_default),
                                 onThemeSelected = viewModel::updateTheme,
                                 onWifiOnlyChanged = viewModel::updateWifiOnly,
                                 onMaxConcurrentChanged = viewModel::updateMaxConcurrent,
                                 onConnectionLimitChanged = viewModel::updateConnectionLimit,
+                                onSplitCountChanged = viewModel::updateSplitCount,
+                                onEnableDhtChanged = viewModel::updateEnableDht,
+                                onDiskCacheMbChanged = viewModel::updateDiskCacheMb,
                                 onDownloadPathClick = { folderPickerLauncher.launch(null) },
                                 onBackClick = { navController.popBackStack() },
                                 onGetProClick = { navController.navigate("paywall/SETTINGS_UPGRADE") }

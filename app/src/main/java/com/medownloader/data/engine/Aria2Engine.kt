@@ -4,8 +4,8 @@ import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.source.Aria2ProcessManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 
 class Aria2Engine(
@@ -153,7 +153,9 @@ class Aria2Engine(
         }
 
         return if (eventDriven) {
-            val eventsFlow = rpcClient.observeDownloadEvents().map { queryAll() }
+            val eventsFlow = rpcClient.observeDownloadEvents().flatMapLatest {
+                flow { emit(queryAll()) }
+            }
             merge(pollingFlow, eventsFlow)
         } else {
             pollingFlow
