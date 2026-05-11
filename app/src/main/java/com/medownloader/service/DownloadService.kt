@@ -15,6 +15,7 @@ import com.medownloader.R
 import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.model.Download
 import com.medownloader.data.source.Aria2ProcessManager
+import com.medownloader.util.formatSpeed
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -326,13 +327,5 @@ class DownloadService : Service() {
 
     private fun notificationIdForGid(gid: String): Int {
         return NOTIFICATION_ID + 1000 + (gid.hashCode() and 0x7fffffff)
-    }
-
-    private fun formatSpeed(bytesPerSecond: Long): String {
-        return when {
-            bytesPerSecond >= 1_000_000 -> "%.1f MB/s".format(bytesPerSecond / 1_000_000.0)
-            bytesPerSecond >= 1_000 -> "%.1f KB/s".format(bytesPerSecond / 1_000.0)
-            else -> "$bytesPerSecond B/s"
-        }
     }
 }

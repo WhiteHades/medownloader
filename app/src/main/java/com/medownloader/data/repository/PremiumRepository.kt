@@ -78,16 +78,6 @@ interface PremiumRepository {
     // ========================================================================
     
     fun isTorrentEnabled(): Boolean
-    fun isSchedulerEnabled(): Boolean
-    fun isVideoSnifferEnabled(): Boolean
-    fun isBatchImportEnabled(): Boolean
-    fun isSpeedBoostEnabled(): Boolean
-    fun isCustomThemesEnabled(): Boolean
-    fun isDownloadAnalyticsEnabled(): Boolean
-    fun isAutoExtractEnabled(): Boolean
-    fun isBrowserIntegrationEnabled(): Boolean
-    fun isDownloadCategoriesEnabled(): Boolean
-    fun isSmartFilenameEnabled(): Boolean
     
     // ========================================================================
     // Upsell Triggers - When to suggest upgrade (non-blocking)
@@ -175,18 +165,7 @@ object FreeTierLimits {
      */
     const val MAX_QUEUE_SIZE = 10
     
-    // ===== Hard Gates (Premium Power Features) =====
     const val TORRENT_ENABLED = false           // P2P is power user territory
-    const val SCHEDULER_ENABLED = false         // "Download at 3 AM" = power user
-    const val VIDEO_SNIFFER_ENABLED = false     // Detect videos on pages
-    const val BATCH_IMPORT_ENABLED = false       // Import 100 URLs at once
-    const val SPEED_BOOST_ENABLED = false        // 16-connection turbo mode
-    const val CUSTOM_THEMES_ENABLED = false      // AMOLED, custom colors
-    const val DOWNLOAD_ANALYTICS_ENABLED = false // Speed graphs, history stats
-    const val AUTO_EXTRACT_ENABLED = false       // Auto-unzip after download
-    const val BROWSER_INTEGRATION_ENABLED = false// Catch browser downloads
-    const val DOWNLOAD_CATEGORIES_ENABLED = false// Auto-sort by file type
-    const val SMART_FILENAME_ENABLED = false     // Clean up ugly URLs
 }
 
 /**
@@ -219,16 +198,6 @@ object PremiumTierLimits {
     
     // ===== Power Features (Premium Exclusive) =====
     const val TORRENT_ENABLED = true
-    const val SCHEDULER_ENABLED = true
-    const val VIDEO_SNIFFER_ENABLED = true
-    const val BATCH_IMPORT_ENABLED = true
-    const val SPEED_BOOST_ENABLED = true
-    const val CUSTOM_THEMES_ENABLED = true
-    const val DOWNLOAD_ANALYTICS_ENABLED = true
-    const val AUTO_EXTRACT_ENABLED = true
-    const val BROWSER_INTEGRATION_ENABLED = true
-    const val DOWNLOAD_CATEGORIES_ENABLED = true
-    const val SMART_FILENAME_ENABLED = true
 }
 
 class PremiumRepositoryImpl(
@@ -448,56 +417,6 @@ class PremiumRepositoryImpl(
     override fun isTorrentEnabled(): Boolean {
         return if (_isPremium.value) PremiumTierLimits.TORRENT_ENABLED 
                else FreeTierLimits.TORRENT_ENABLED
-    }
-    
-    override fun isSchedulerEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.SCHEDULER_ENABLED
-               else FreeTierLimits.SCHEDULER_ENABLED
-    }
-    
-    override fun isVideoSnifferEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.VIDEO_SNIFFER_ENABLED
-               else FreeTierLimits.VIDEO_SNIFFER_ENABLED
-    }
-    
-    override fun isBatchImportEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.BATCH_IMPORT_ENABLED
-               else FreeTierLimits.BATCH_IMPORT_ENABLED
-    }
-    
-    override fun isSpeedBoostEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.SPEED_BOOST_ENABLED
-               else FreeTierLimits.SPEED_BOOST_ENABLED
-    }
-    
-    override fun isCustomThemesEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.CUSTOM_THEMES_ENABLED
-               else FreeTierLimits.CUSTOM_THEMES_ENABLED
-    }
-    
-    override fun isDownloadAnalyticsEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.DOWNLOAD_ANALYTICS_ENABLED
-               else FreeTierLimits.DOWNLOAD_ANALYTICS_ENABLED
-    }
-    
-    override fun isAutoExtractEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.AUTO_EXTRACT_ENABLED
-               else FreeTierLimits.AUTO_EXTRACT_ENABLED
-    }
-    
-    override fun isBrowserIntegrationEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.BROWSER_INTEGRATION_ENABLED
-               else FreeTierLimits.BROWSER_INTEGRATION_ENABLED
-    }
-    
-    override fun isDownloadCategoriesEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.DOWNLOAD_CATEGORIES_ENABLED
-               else FreeTierLimits.DOWNLOAD_CATEGORIES_ENABLED
-    }
-    
-    override fun isSmartFilenameEnabled(): Boolean {
-        return if (_isPremium.value) PremiumTierLimits.SMART_FILENAME_ENABLED
-               else FreeTierLimits.SMART_FILENAME_ENABLED
     }
 
     // ========================================================================

@@ -343,6 +343,3 @@ class Aria2ProcessManager(private val context: Context) {
 
     fun getRpcUrl(): String = "http://localhost:$RPC_PORT/jsonrpc"
 
-    suspend fun updateLimits(maxConcurrent: Int, maxConnections: Int, split: Int) {
-    }
-}
