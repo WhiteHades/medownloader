@@ -7,7 +7,7 @@ import com.medownloader.data.repository.FileInfo
 import com.medownloader.data.source.Aria2ProcessManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
 import java.util.function.Consumer
 
@@ -19,78 +19,95 @@ class YtDlpEngine(
         private const val TAG = "YtDlpEngine"
     }
 
-    override suspend fun download(options: DownloadOptions): Flow<DownloadProgress> {
-        val progressChannel = MutableSharedFlow<DownloadProgress>(extraBufferCapacity = 64)
+    /**
+     * Runs yt-dlp and streams [DownloadProgress] events to the collector.
+     *
+     * Implementation note:
+     * - We use [channelFlow] so the Flow is returned immediately and the yt-dlp blocking
+     *   work starts inside the collector's coroutine. The previous implementation used
+     *   `MutableSharedFlow(replay = 0)` and emitted events before a collector was attached,
+     *   which silently dropped every progress update. That is why paste-triggered downloads
+     *   "ran in the background" but never showed up in the UI.
+     * - Progress hook events arrive on whichever thread yt-dlp dispatches on; [trySend] is
+     *   thread-safe and non-blocking, which is what we want inside a Python callback.
+     * - We emit a terminal COMPLETE (or ERROR) event and then let the channelFlow block
+     *   return, which closes the channel and ends the Flow.
+     */
+    override suspend fun download(options: DownloadOptions): Flow<DownloadProgress> =
+        channelFlow {
+            withContext(Dispatchers.IO) {
+                try {
+                    val py = Python.getInstance()
+                    val ytdlp = py.getModule("yt_dlp")
 
-        withContext(Dispatchers.IO) {
-            try {
-                val py = Python.getInstance()
-                val ytdlp = py.getModule("yt_dlp")
+                    val progressHook = Consumer<Map<String, Any?>> { raw ->
+                        val status = raw["status"] as? String ?: return@Consumer
+                        val downloaded = (raw["downloaded_bytes"] as? Number)?.toLong() ?: 0L
+                        val total = (raw["total_bytes"] as? Number)?.toLong()
+                            ?: (raw["total_bytes_estimate"] as? Number)?.toLong()
+                            ?: 0L
+                        val speed = (raw["speed"] as? Number)?.toLong() ?: 0L
+                        val eta = (raw["eta"] as? Number)?.toLong() ?: 0L
+                        val filename = raw["filename"] as? String
+                            ?: options.filename
+                            ?: options.url
 
-                val progressHook = Consumer<Map<String, Any?>> { raw ->
-                    val status = raw["status"] as? String ?: return@Consumer
-                    val downloaded = (raw["downloaded_bytes"] as? Number)?.toLong() ?: 0L
-                    val total = (raw["total_bytes"] as? Number)?.toLong() ?: 0L
-                    val speed = (raw["speed"] as? Number)?.toLong() ?: 0L
-                    val eta = (raw["eta"] as? Number)?.toLong() ?: 0L
-                    val filename = raw["filename"] as? String ?: options.filename ?: options.url
+                        val mappedStatus = when (status) {
+                            "downloading" -> DownloadStatus.ACTIVE
+                            "finished" -> DownloadStatus.COMPLETE
+                            "error" -> DownloadStatus.ERROR
+                            else -> DownloadStatus.QUEUED
+                        }
 
-                    val mappedStatus = when (status) {
-                        "downloading" -> DownloadStatus.ACTIVE
-                        "finished" -> DownloadStatus.COMPLETE
-                        "error" -> DownloadStatus.ERROR
-                        else -> DownloadStatus.QUEUED
+                        trySend(
+                            DownloadProgress(
+                                gid = options.url,
+                                status = mappedStatus,
+                                filename = filename,
+                                downloadedBytes = downloaded,
+                                totalBytes = total,
+                                speed = speed,
+                                eta = eta
+                            )
+                        )
                     }
 
-                    progressChannel.tryEmit(
+                    val params = buildYtdlpParams(options).toMutableMap()
+                    params["progress_hooks"] = listOf(progressHook)
+
+                    val ydl = ytdlp.callAttr("YoutubeDL", params.toPython(py))
+                    ydl.callAttr("download", listOf(options.url).toPython(py))
+
+                    // yt-dlp does not always fire a "finished" progress event; emit our own
+                    // terminal COMPLETE so the repository records the download as finished.
+                    send(
                         DownloadProgress(
                             gid = options.url,
-                            status = mappedStatus,
-                            filename = filename,
-                            downloadedBytes = downloaded,
-                            totalBytes = total,
-                            speed = speed,
-                            eta = eta
+                            status = DownloadStatus.COMPLETE,
+                            filename = options.filename ?: options.url,
+                            downloadedBytes = 0,
+                            totalBytes = 0,
+                            speed = 0,
+                            eta = 0
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "yt-dlp download failed", e)
+                    send(
+                        DownloadProgress(
+                            gid = options.url,
+                            status = DownloadStatus.ERROR,
+                            filename = options.filename ?: options.url,
+                            downloadedBytes = 0,
+                            totalBytes = 0,
+                            speed = 0,
+                            eta = 0,
+                            errorMessage = e.message
                         )
                     )
                 }
-
-                val params = buildYtdlpParams(options).toMutableMap()
-                params["progress_hooks"] = listOf(progressHook)
-
-                val ydl = ytdlp.callAttr("YoutubeDL", params.toPython(py))
-                ydl.callAttr("download", listOf(options.url).toPython(py))
-
-                progressChannel.tryEmit(
-                    DownloadProgress(
-                        gid = options.url,
-                        status = DownloadStatus.COMPLETE,
-                        filename = options.filename ?: options.url,
-                        downloadedBytes = 0,
-                        totalBytes = 0,
-                        speed = 0,
-                        eta = 0
-                    )
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "yt-dlp download failed", e)
-                progressChannel.tryEmit(
-                    DownloadProgress(
-                        gid = options.url,
-                        status = DownloadStatus.ERROR,
-                        filename = options.filename ?: options.url,
-                        downloadedBytes = 0,
-                        totalBytes = 0,
-                        speed = 0,
-                        eta = 0,
-                        errorMessage = e.message
-                    )
-                )
             }
         }
-
-        return progressChannel
-    }
 
     override suspend fun pause(gid: String): Result<Unit> =
         Result.failure(UnsupportedOperationException("yt-dlp pause/resume not yet implemented"))
