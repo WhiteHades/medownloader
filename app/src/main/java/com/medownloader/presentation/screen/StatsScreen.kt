@@ -4,6 +4,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,48 +19,49 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.outlined.Album
 import androidx.compose.material.icons.outlined.AudioFile
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.InstallMobile
 import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.material.icons.outlined.VideoFile
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -77,6 +79,7 @@ import com.medownloader.ui.theme.ErrorRed40
 import com.medownloader.ui.theme.ExpressiveShapeTokens
 import com.medownloader.ui.theme.ExpressiveShapes
 import com.medownloader.ui.theme.MonoTextStyle
+import com.medownloader.ui.theme.MonoTextStyleLarge
 import com.medownloader.ui.theme.MonoTextStyleSmall
 import com.medownloader.ui.theme.SuccessGreen40
 import com.medownloader.ui.theme.SuccessGreen90
@@ -96,7 +99,17 @@ fun StatsScreen(
     onClearHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val snapshot = remember(downloads, history) { buildStatsSnapshot(downloads, history) }
+    var range by rememberSaveable { mutableStateOf(StatsRange.SEVEN_DAYS) }
+    val liveActiveCount = remember(downloads) {
+        downloads.count {
+            it.status == DownloadStatus.ACTIVE ||
+                it.status == DownloadStatus.PAUSED ||
+                it.status == DownloadStatus.QUEUED
+        }
+    }
+    val snapshot = remember(history, liveActiveCount, range) {
+        buildStatsSnapshot(history, liveActiveCount, range)
+    }
 
     Scaffold(
         topBar = {
@@ -136,85 +149,784 @@ fun StatsScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            item { HeroCard(snapshot = snapshot) }
+
             item {
-                SectionHeading(
-                    title = stringResource(R.string.stats_overview),
-                    subtitle = stringResource(R.string.stats_overview_subtitle)
+                TimeRangeSelector(
+                    selected = range,
+                    onSelect = { range = it }
                 )
             }
 
-            item {
-                SummaryCards(snapshot = snapshot)
-            }
+            item { MetricGrid(snapshot = snapshot) }
 
-            if (downloads.isNotEmpty()) {
-                item {
-                    SectionHeading(
-                        title = stringResource(R.string.stats_live_queue),
-                        subtitle = stringResource(R.string.stats_live_queue_subtitle)
-                    )
-                }
+            item { StatusBreakdownCard(snapshot = snapshot) }
 
-                item {
-                    LiveQueueCard(downloads = downloads)
-                }
-            }
+            item { DailyVolumeCard(snapshot = snapshot) }
+
+            item { ActivityHeatmapCard(snapshot = snapshot) }
+
+            item { FileTypesCard(snapshot = snapshot) }
 
             item {
-                SectionHeading(
-                    title = stringResource(R.string.stats_history_trend),
-                    subtitle = stringResource(R.string.stats_history_trend_subtitle)
-                )
-            }
-
-            item {
-                DailyBytesCard(snapshot = snapshot)
-            }
-
-            item {
-                StatusDistributionCard(snapshot = snapshot)
-            }
-
-            item {
-                SpeedHistoryCard(snapshot = snapshot)
-            }
-
-            item {
-                FileTypesCard(fileTypeStats = snapshot.fileTypes)
-            }
-
-            item {
-                SectionHeading(
-                    title = stringResource(R.string.stats_recent_history),
-                    subtitle = stringResource(R.string.stats_recent_history_subtitle)
+                QuietSectionHeader(
+                    title = stringResource(R.string.stats_history_title),
+                    subtitle = stringResource(R.string.stats_history_subtitle)
                 )
             }
 
             if (history.isEmpty()) {
-                item {
-                    EmptyHistoryCard()
-                }
+                item { EmptyHistoryRow() }
             } else {
-                items(history.take(12), key = { it.id }) { entry ->
-                    HistoryEntryCard(entry = entry)
+                items(history.take(15), key = { it.id }) { entry ->
+                    HistoryRow(entry = entry)
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(24.dp)) }
+            item { Spacer(modifier = Modifier.height(32.dp)) }
         }
     }
 }
 
 @Composable
-private fun SectionHeading(title: String, subtitle: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+private fun HeroCard(snapshot: StatsSnapshot) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = ExpressiveShapeTokens.CardHero
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.stats_hero_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TrendChip(delta = snapshot.trendBytesDelta, isAllTime = snapshot.range.isAllTime)
+            }
+
+            Text(
+                text = formatSize(snapshot.totalBytesDownloaded),
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+
+            Text(
+                text = if (snapshot.completedCount == 0) {
+                    stringResource(R.string.stats_hero_count_zero)
+                } else {
+                    stringResource(R.string.stats_hero_count_fmt, snapshot.completedCount)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (!snapshot.range.isAllTime && snapshot.allTimeBytes > snapshot.totalBytesDownloaded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Outlined.Storage,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${formatSize(snapshot.allTimeBytes)} · ${snapshot.allTimeCompletedCount} all-time",
+                        style = MonoTextStyleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrendChip(delta: Long, isAllTime: Boolean) {
+    if (isAllTime || delta == 0L) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = ExpressiveShapeTokens.Full
+        ) {
+            Text(
+                text = stringResource(R.string.stats_trend_flat),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+
+    val positive = delta > 0
+    val bg = if (positive) SuccessGreen90 else MaterialTheme.colorScheme.errorContainer
+    val fg = if (positive) SuccessGreen40 else MaterialTheme.colorScheme.error
+    val icon = if (positive) Icons.AutoMirrored.Outlined.TrendingUp else Icons.AutoMirrored.Outlined.TrendingDown
+    val label = if (positive) {
+        stringResource(R.string.stats_trend_up_fmt, formatSize(kotlin.math.abs(delta)))
+    } else {
+        stringResource(R.string.stats_trend_down_fmt, formatSize(kotlin.math.abs(delta)))
+    }
+
+    Surface(color = bg, shape = ExpressiveShapeTokens.Full) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = stringResource(R.string.stats_trend_content_desc),
+                modifier = Modifier.size(14.dp),
+                tint = fg
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = fg,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimeRangeSelector(
+    selected: StatsRange,
+    onSelect: (StatsRange) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = ExpressiveShapeTokens.Full
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            StatsRange.values().forEach { option ->
+                RangePill(
+                    option = option,
+                    selected = selected == option,
+                    onClick = { onSelect(option) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RangePill(
+    option: StatsRange,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val label = when (option) {
+        StatsRange.SEVEN_DAYS -> stringResource(R.string.stats_range_7d)
+        StatsRange.THIRTY_DAYS -> stringResource(R.string.stats_range_30d)
+        StatsRange.ALL_TIME -> stringResource(R.string.stats_range_all)
+    }
+    val bg = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Surface(
+        modifier = modifier,
+        color = bg,
+        shape = ExpressiveShapeTokens.Full,
+        onClick = onClick
+    ) {
+        Box(
+            modifier = Modifier.padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = fg,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricGrid(snapshot: StatsSnapshot) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MetricTile(
+                label = stringResource(R.string.stats_metric_completed),
+                value = snapshot.completedCount.toString(),
+                icon = Icons.Outlined.CheckCircle,
+                accent = SuccessGreen40,
+                modifier = Modifier.weight(1f)
+            )
+            MetricTile(
+                label = stringResource(R.string.stats_metric_failed),
+                value = snapshot.failedCount.toString(),
+                icon = Icons.Outlined.Cancel,
+                accent = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MetricTile(
+                label = stringResource(R.string.stats_metric_avg_speed),
+                value = formatSpeed(snapshot.averageSpeed),
+                icon = Icons.Outlined.Speed,
+                accent = MaterialTheme.colorScheme.primary,
+                mono = true,
+                modifier = Modifier.weight(1f)
+            )
+            MetricTile(
+                label = stringResource(R.string.stats_metric_peak_speed),
+                value = formatSpeed(snapshot.peakSpeed),
+                icon = Icons.AutoMirrored.Outlined.TrendingUp,
+                accent = MaterialTheme.colorScheme.tertiary,
+                mono = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricTile(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    mono: Boolean = false
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = ExpressiveShapeTokens.CardSoft
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                color = accent.copy(alpha = 0.14f),
+                shape = ExpressiveShapes.small
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .size(16.dp),
+                    tint = accent
+                )
+            }
+            Text(
+                text = value,
+                style = if (mono) MonoTextStyleLarge else MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusBreakdownCard(snapshot: StatsSnapshot) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = ExpressiveShapeTokens.CardBold
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            CardHeader(
+                title = stringResource(R.string.stats_status_title),
+                icon = Icons.Outlined.Timeline
+            )
+
+            if (snapshot.totalForStatusBar == 0) {
+                Text(
+                    text = stringResource(R.string.stats_status_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                StackedStatusBar(
+                    completed = snapshot.completedRatio,
+                    failed = snapshot.failedRatio,
+                    active = snapshot.activeRatio,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatusLegend(
+                        color = SuccessGreen40,
+                        label = stringResource(R.string.stats_status_completed),
+                        value = snapshot.completedCount
+                    )
+                    StatusLegend(
+                        color = MaterialTheme.colorScheme.error,
+                        label = stringResource(R.string.stats_status_failed),
+                        value = snapshot.failedCount
+                    )
+                    StatusLegend(
+                        color = MaterialTheme.colorScheme.primary,
+                        label = stringResource(R.string.stats_status_active),
+                        value = snapshot.activeCount
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StackedStatusBar(
+    completed: Float,
+    failed: Float,
+    active: Float,
+    modifier: Modifier
+) {
+    val animatedCompleted by animateFloatAsState(
+        targetValue = completed,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "completedBar"
+    )
+    val animatedFailed by animateFloatAsState(
+        targetValue = failed,
+        animationSpec = tween(700, delayMillis = 80, easing = FastOutSlowInEasing),
+        label = "failedBar"
+    )
+    val animatedActive by animateFloatAsState(
+        targetValue = active,
+        animationSpec = tween(700, delayMillis = 160, easing = FastOutSlowInEasing),
+        label = "activeBar"
+    )
+
+    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val completedColor = SuccessGreen40
+    val failedColor = MaterialTheme.colorScheme.error
+    val activeColor = MaterialTheme.colorScheme.primary
+
+    Canvas(modifier = modifier.clip(RoundedCornerShape(percent = 50))) {
+        drawRect(color = trackColor)
+        var x = 0f
+        val segments = listOf(
+            animatedCompleted to completedColor,
+            animatedFailed to failedColor,
+            animatedActive to activeColor
+        )
+        segments.forEach { (ratio, color) ->
+            if (ratio <= 0f) return@forEach
+            val width = size.width * ratio
+            drawRect(
+                color = color,
+                topLeft = Offset(x, 0f),
+                size = Size(width, size.height)
+            )
+            x += width
+        }
+    }
+}
+
+@Composable
+private fun StatusLegend(color: Color, label: String, value: Int) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(modifier = Modifier.size(8.dp), color = color, shape = ExpressiveShapeTokens.Full) {}
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value.toString(),
+            style = MonoTextStyleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun DailyVolumeCard(snapshot: StatsSnapshot) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = ExpressiveShapeTokens.CardBold
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CardHeader(
+                    title = stringResource(R.string.stats_volume_title),
+                    icon = Icons.Outlined.CloudDownload
+                )
+            }
+
+            if (snapshot.dailyVolume.all { it.bytes == 0L }) {
+                Text(
+                    text = stringResource(R.string.stats_volume_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = stringResource(
+                        R.string.stats_volume_subtitle_fmt,
+                        formatSize(snapshot.peakDailyVolume)
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                DailyVolumeBars(
+                    snapshot = snapshot,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    snapshot.dailyVolume.filterIndexed { index, _ ->
+                        index == 0 ||
+                            index == snapshot.dailyVolume.lastIndex ||
+                            index == snapshot.dailyVolume.size / 2
+                    }.forEach { point ->
+                        Text(
+                            text = point.label,
+                            style = MonoTextStyleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyVolumeBars(
+    snapshot: StatsSnapshot,
+    modifier: Modifier
+) {
+    val max = snapshot.peakDailyVolume.coerceAtLeast(1L)
+    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val barColor = MaterialTheme.colorScheme.primary
+
+    Canvas(modifier = modifier) {
+        val count = snapshot.dailyVolume.size.coerceAtLeast(1)
+        val slotWidth = size.width / count
+        val barWidth = slotWidth * 0.6f
+        snapshot.dailyVolume.forEachIndexed { index, point ->
+            val ratio = point.bytes.toFloat() / max
+            val barHeight = (size.height * ratio).coerceAtLeast(4f)
+            val left = index * slotWidth + (slotWidth - barWidth) / 2f
+
+            drawRoundRect(
+                color = trackColor,
+                topLeft = Offset(left, 0f),
+                size = Size(barWidth, size.height),
+                cornerRadius = CornerRadius(barWidth / 2f)
+            )
+            drawRoundRect(
+                color = barColor,
+                topLeft = Offset(left, size.height - barHeight),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth / 2f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActivityHeatmapCard(snapshot: StatsSnapshot) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = ExpressiveShapeTokens.CardSoft
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            CardHeader(
+                title = stringResource(R.string.stats_activity_title),
+                icon = Icons.Outlined.Timeline
+            )
+            Text(
+                text = stringResource(R.string.stats_activity_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Heatmap(
+                cells = snapshot.heatmap,
+                accent = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            )
+
+            HeatmapLegend(accent = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@Composable
+private fun Heatmap(
+    cells: List<HeatmapCell>,
+    accent: Color,
+    trackColor: Color,
+    modifier: Modifier
+) {
+    if (cells.isEmpty()) return
+    val weeks = 12
+    val days = 7
+    val maxBytes = (cells.maxOfOrNull { it.bytes } ?: 1L).coerceAtLeast(1L)
+
+    Canvas(modifier = modifier) {
+        val gap = 3.dp.toPx()
+        val cellW = (size.width - gap * (weeks - 1)) / weeks
+        val cellH = (size.height - gap * (days - 1)) / days
+        val radius = cellW.coerceAtMost(cellH) / 4f
+
+        cells.forEachIndexed { index, cell ->
+            val week = index / days
+            val day = index % days
+            val x = week * (cellW + gap)
+            val y = day * (cellH + gap)
+            val intensity = if (cell.bytes <= 0L) {
+                0f
+            } else {
+                0.25f + 0.75f * (cell.bytes.toFloat() / maxBytes)
+            }
+            val color = if (intensity == 0f) trackColor else accent.copy(alpha = intensity.coerceIn(0f, 1f))
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(x, y),
+                size = Size(cellW, cellH),
+                cornerRadius = CornerRadius(radius, radius)
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeatmapLegend(accent: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.stats_activity_legend_less),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf(0.15f, 0.35f, 0.55f, 0.75f, 1f).forEach { alpha ->
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(
+                            if (alpha == 0.15f) MaterialTheme.colorScheme.surfaceContainerHighest
+                            else accent.copy(alpha = alpha)
+                        )
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.stats_activity_legend_more),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun FileTypesCard(snapshot: StatsSnapshot) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = ExpressiveShapeTokens.CardSoft
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            CardHeader(
+                title = stringResource(R.string.stats_file_types_title),
+                icon = Icons.Outlined.Storage
+            )
+
+            if (snapshot.fileTypes.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.stats_file_types_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                return@Column
+            }
+
+            Text(
+                text = stringResource(R.string.stats_file_types_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            val totalCount = snapshot.fileTypes.sumOf { it.count }.coerceAtLeast(1)
+            snapshot.fileTypes.take(5).forEach { stat ->
+                FileTypeRow(stat = stat, totalCount = totalCount)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileTypeRow(stat: FileTypeStat, totalCount: Int) {
+    val ratio = (stat.count.toFloat() / totalCount).coerceIn(0f, 1f)
+    val animated by animateFloatAsState(
+        targetValue = ratio,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "fileTypeRatio"
+    )
+    val accent = fileTypeAccent(stat.type)
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    fileTypeIcon(stat.type),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = accent
+                )
+                Text(
+                    text = stat.type.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = formatSize(stat.bytes),
+                    style = MonoTextStyleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = stringResource(R.string.stats_file_types_count_fmt, stat.count),
+                    style = MonoTextStyleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animated)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(accent)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CardHeader(title: String, icon: ImageVector) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Text(
             text = title,
             modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun QuietSectionHeader(title: String, subtitle: String) {
+    Column(
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold
         )
         Text(
@@ -226,64 +938,57 @@ private fun SectionHeading(title: String, subtitle: String) {
 }
 
 @Composable
-private fun SummaryCards(snapshot: StatsSnapshot) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        OverviewStatCard(
-            icon = Icons.Outlined.CloudDownload,
-            value = snapshot.completedCount.toString(),
-            label = stringResource(R.string.stats_completed_total),
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.weight(1f)
-        )
-        OverviewStatCard(
-            icon = Icons.Outlined.Storage,
-            value = formatSize(snapshot.totalBytesDownloaded),
-            label = stringResource(R.string.stats_downloaded),
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            modifier = Modifier.weight(1f)
-        )
-        OverviewStatCard(
-            icon = Icons.AutoMirrored.Outlined.TrendingUp,
-            value = formatSpeed(snapshot.averageHistoricalSpeed),
-            label = stringResource(R.string.stats_average),
-            containerColor = SuccessGreen90,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
+private fun HistoryRow(entry: DownloadHistoryEntry) {
+    val isComplete = entry.status == DownloadStatus.COMPLETE.name
+    val accent = if (isComplete) SuccessGreen40 else MaterialTheme.colorScheme.error
+    val icon = if (isComplete) Icons.Filled.CheckCircle else Icons.Filled.Error
 
-@Composable
-private fun OverviewStatCard(
-    icon: ImageVector,
-    value: String,
-    label: String,
-    containerColor: Color,
-    modifier: Modifier = Modifier
-) {
     Surface(
-        modifier = modifier,
-        color = containerColor,
-        shape = ExpressiveShapeTokens.StatsCard
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = ExpressiveShapes.medium
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(28.dp))
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = accent
+                )
+                Text(
+                    text = entry.filename,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = formatSize(entry.totalBytes),
+                    style = MonoTextStyleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = LocalContentColor.current.copy(alpha = 0.72f),
+                text = buildString {
+                    append(formatTimestamp(entry.finishedAtEpochMs))
+                    if (entry.durationMs > 0) {
+                        append(" · ")
+                        append(formatDuration(entry.durationMs))
+                    }
+                    if (entry.averageSpeed > 0) {
+                        append(" · ")
+                        append(formatSpeed(entry.averageSpeed))
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -292,382 +997,32 @@ private fun OverviewStatCard(
 }
 
 @Composable
-private fun LiveQueueCard(downloads: List<DownloadProgress>) {
-    Card(
+private fun EmptyHistoryRow() {
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = ExpressiveShapeTokens.CardBold,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = ExpressiveShapeTokens.CardSoft
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.stats_live_queue),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = stringResource(R.string.stats_live_count_fmt, downloads.size),
-                    style = MonoTextStyleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            downloads.take(6).forEach { download ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = download.filename,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = when (download.status) {
-                                DownloadStatus.ACTIVE -> formatSpeed(download.downloadSpeed)
-                                DownloadStatus.PAUSED -> stringResource(R.string.status_paused)
-                                DownloadStatus.QUEUED -> stringResource(R.string.status_waiting)
-                                else -> download.status.name.lowercase()
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        text = "${download.progressPercent}%",
-                        style = MonoTextStyleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                LinearProgressIndicator(
-                    progress = { download.progress },
-                    modifier = Modifier.fillMaxWidth().height(6.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    strokeCap = StrokeCap.Round
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DailyBytesCard(snapshot: StatsSnapshot) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = ExpressiveShapeTokens.CardBold,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.stats_history_trend),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            DailyBytesBarChart(
-                dailyPoints = snapshot.dailyHistory,
-                modifier = Modifier.fillMaxWidth().height(160.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun DailyBytesBarChart(dailyPoints: List<DailyHistoryPoint>, modifier: Modifier = Modifier) {
-    val maxBytes = (dailyPoints.maxOfOrNull { it.bytes } ?: 1L).coerceAtLeast(1L)
-    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-    val barBrush = Brush.verticalGradient(
-        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
-    )
-    Canvas(modifier = modifier) {
-        val count = dailyPoints.size.coerceAtLeast(1)
-        val slotWidth = size.width / count
-        val barWidth = slotWidth * 0.56f
-        dailyPoints.forEachIndexed { index, point ->
-            val barHeight = (point.bytes.toFloat() / maxBytes) * size.height
-            val left = index * slotWidth + ((slotWidth - barWidth) / 2f)
-            drawRoundRect(
-                color = trackColor,
-                topLeft = Offset(left, 0f),
-                size = Size(barWidth, size.height),
-                cornerRadius = CornerRadius(barWidth / 2f)
-            )
-            drawRoundRect(
-                brush = barBrush,
-                topLeft = Offset(left, size.height - barHeight),
-                size = Size(barWidth, barHeight.coerceAtLeast(4f)),
-                cornerRadius = CornerRadius(barWidth / 2f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatusDistributionCard(snapshot: StatsSnapshot) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = ExpressiveShapeTokens.CardBold,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.stats_status_distribution),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                StatusRingChart(
-                    completedPercent = snapshot.completedRatio,
-                    failedPercent = snapshot.failedRatio,
-                    activePercent = snapshot.activeRatio,
-                    modifier = Modifier.size(126.dp)
-                )
-
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LegendItem(SuccessGreen40, stringResource(R.string.dashboard_completed), snapshot.completedCount)
-                    LegendItem(MaterialTheme.colorScheme.error, stringResource(R.string.stats_failed), snapshot.failedCount)
-                    LegendItem(MaterialTheme.colorScheme.primary, stringResource(R.string.dashboard_active), snapshot.activeCount)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusRingChart(
-    completedPercent: Float,
-    failedPercent: Float,
-    activePercent: Float,
-    modifier: Modifier = Modifier
-) {
-    val completed by animateFloatAsState(completedPercent, tween(900, easing = FastOutSlowInEasing), label = "completed")
-    val failed by animateFloatAsState(failedPercent, tween(900, delayMillis = 120, easing = FastOutSlowInEasing), label = "failed")
-    val active by animateFloatAsState(activePercent, tween(900, delayMillis = 240, easing = FastOutSlowInEasing), label = "active")
-    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-    val failedColor = MaterialTheme.colorScheme.error
-    val activeColor = MaterialTheme.colorScheme.primary
-
-    Canvas(modifier = modifier) {
-        val strokeWidth = 16.dp.toPx()
-        val radius = (size.minDimension - strokeWidth) / 2f
-        val center = Offset(size.width / 2f, size.height / 2f)
-
-        drawCircle(
-            color = trackColor,
-            radius = radius,
-            center = center,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-        )
-
-        var start = -90f
-        listOf(
-            completed to SuccessGreen40,
-            failed to failedColor,
-            active to activeColor
-        ).forEach { (value, color) ->
-            if (value > 0f) {
-                val sweep = value * 360f
-                drawArc(
-                    color = color,
-                    startAngle = start,
-                    sweepAngle = sweep,
-                    useCenter = false,
-                    topLeft = Offset(center.x - radius, center.y - radius),
-                    size = Size(radius * 2f, radius * 2f),
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
-                start += sweep
-            }
-        }
-    }
-}
-
-@Composable
-private fun LegendItem(color: Color, label: String, value: Int) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Surface(modifier = Modifier.size(12.dp), color = color, shape = ExpressiveShapeTokens.Full) {}
-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(text = value.toString(), style = MonoTextStyleSmall, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun SpeedHistoryCard(snapshot: StatsSnapshot) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = ExpressiveShapeTokens.CardSoft,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                SpeedStatItem(stringResource(R.string.stats_average), snapshot.averageHistoricalSpeed, Icons.Outlined.Speed)
-                SpeedStatItem(stringResource(R.string.stats_peak), snapshot.peakHistoricalSpeed, Icons.AutoMirrored.Outlined.TrendingUp)
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Text(
-                text = stringResource(R.string.stats_speed_history),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            SpeedLineChart(
-                speeds = snapshot.recentSpeeds,
-                modifier = Modifier.fillMaxWidth().height(120.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun SpeedStatItem(label: String, speed: Long, icon: ImageVector) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = ExpressiveShapes.small) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.padding(8.dp).size(20.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
-        Column {
-            Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(text = formatSpeed(speed), style = MonoTextStyle, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun SpeedLineChart(speeds: List<Long>, modifier: Modifier = Modifier) {
-    val points = if (speeds.isEmpty()) listOf(0L) else speeds
-    val maxSpeed = (points.maxOrNull() ?: 1L).coerceAtLeast(1L)
-    val lineColor = MaterialTheme.colorScheme.primary
-    val pointColor = MaterialTheme.colorScheme.tertiary
-
-    Canvas(modifier = modifier) {
-        val stepX = if (points.size == 1) size.width else size.width / (points.size - 1).toFloat()
-        val path = Path()
-        points.forEachIndexed { index, speed ->
-            val x = index * stepX
-            val y = size.height - ((speed.toFloat() / maxSpeed) * size.height)
-            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-
-        drawPath(
-            path = path,
-            color = lineColor,
-            style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-        )
-
-        points.forEachIndexed { index, speed ->
-            val x = index * stepX
-            val y = size.height - ((speed.toFloat() / maxSpeed) * size.height)
-            drawCircle(pointColor, radius = 5.dp.toPx(), center = Offset(x, y))
-        }
-    }
-}
-
-@Composable
-private fun FileTypesCard(fileTypeStats: Map<String, Int>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = ExpressiveShapeTokens.CardSoft,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (fileTypeStats.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.stats_empty_history),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                fileTypeStats.entries.sortedByDescending { it.value }.take(6).forEach { (type, count) ->
-                    FileTypeRow(type = type, count = count, total = fileTypeStats.values.sum())
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FileTypeRow(type: String, count: Int, total: Int) {
-    val percentage = if (total == 0) 0f else count.toFloat() / total
-    val animated by animateFloatAsState(percentage, tween(800, easing = FastOutSlowInEasing), label = "fileType")
-
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(getFileTypeIcon(type), contentDescription = null, modifier = Modifier.size(16.dp), tint = getFileTypeColor(type))
-                Text(text = type.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-            }
-            Text(
-                text = stringResource(R.string.stats_files_suffix, count),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        LinearProgressIndicator(
-            progress = { animated },
-            modifier = Modifier.fillMaxWidth().height(6.dp),
-            color = getFileTypeColor(type),
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            strokeCap = StrokeCap.Round
-        )
-    }
-}
-
-@Composable
-private fun EmptyHistoryCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = ExpressiveShapeTokens.CardSoft,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Icon(
                 Icons.Outlined.Storage,
                 contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                tint = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = stringResource(R.string.stats_empty_history),
+                text = stringResource(R.string.stats_history_empty_title),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = stringResource(R.string.stats_empty_history_subtitle),
+                text = stringResource(R.string.stats_history_empty_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -675,114 +1030,25 @@ private fun EmptyHistoryCard() {
     }
 }
 
-@Composable
-private fun HistoryEntryCard(entry: DownloadHistoryEntry) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = ExpressiveShapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = if (entry.status == DownloadStatus.COMPLETE.name) SuccessGreen90 else MaterialTheme.colorScheme.errorContainer,
-                shape = ExpressiveShapes.small
-            ) {
-                Icon(
-                    imageVector = if (entry.status == DownloadStatus.COMPLETE.name) Icons.Filled.CheckCircle else Icons.Filled.Error,
-                    contentDescription = null,
-                    modifier = Modifier.padding(8.dp).size(20.dp),
-                    tint = if (entry.status == DownloadStatus.COMPLETE.name) SuccessGreen40 else MaterialTheme.colorScheme.error
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = entry.filename,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${formatSize(entry.totalBytes)} • ${formatDuration(entry.durationMs)} • ${formatTimestamp(entry.finishedAtEpochMs)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            if (entry.averageSpeed > 0) {
-                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = ExpressiveShapeTokens.Full) {
-                    Text(
-                        text = formatSpeed(entry.averageSpeed),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MonoTextStyleSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun getFileTypeIcon(type: String): ImageVector = when (type.lowercase()) {
-    "zip", "rar", "7z", "tar", "gz" -> Icons.Outlined.FolderZip
-    "mp4", "mkv", "avi", "webm" -> Icons.Outlined.VideoFile
-    "mp3", "flac", "wav", "aac" -> Icons.Outlined.AudioFile
+private fun fileTypeIcon(type: String): ImageVector = when (type.lowercase()) {
+    "zip", "rar", "7z", "tar", "gz", "xz" -> Icons.Outlined.FolderZip
+    "mp4", "mkv", "avi", "webm", "mov" -> Icons.Outlined.VideoFile
+    "mp3", "flac", "wav", "aac", "ogg", "opus" -> Icons.Outlined.AudioFile
     "pdf" -> Icons.Outlined.PictureAsPdf
-    "apk", "exe" -> Icons.Outlined.InstallMobile
-    "iso", "img" -> Icons.Outlined.Album
+    "apk", "exe", "msi", "deb", "rpm" -> Icons.Outlined.InstallMobile
+    "iso", "img", "dmg" -> Icons.Outlined.Album
     else -> Icons.Outlined.Storage
 }
 
 @Composable
-private fun getFileTypeColor(type: String): Color = when (type.lowercase()) {
-    "zip", "rar", "7z", "tar", "gz" -> MaterialTheme.colorScheme.tertiary
-    "mp4", "mkv", "avi", "webm" -> MaterialTheme.colorScheme.secondary
-    "mp3", "flac", "wav", "aac" -> MaterialTheme.colorScheme.secondary
+private fun fileTypeAccent(type: String): Color = when (type.lowercase()) {
+    "zip", "rar", "7z", "tar", "gz", "xz" -> MaterialTheme.colorScheme.tertiary
+    "mp4", "mkv", "avi", "webm", "mov" -> MaterialTheme.colorScheme.secondary
+    "mp3", "flac", "wav", "aac", "ogg", "opus" -> MaterialTheme.colorScheme.secondary
     "pdf" -> ErrorRed40
-    "apk", "exe" -> SuccessGreen40
-    "iso", "img" -> MaterialTheme.colorScheme.primary
+    "apk", "exe", "msi", "deb", "rpm" -> SuccessGreen40
+    "iso", "img", "dmg" -> MaterialTheme.colorScheme.primary
     else -> MaterialTheme.colorScheme.outline
-}
-
-private fun buildStatsSnapshot(
-    downloads: List<DownloadProgress>,
-    history: List<DownloadHistoryEntry>
-): StatsSnapshot {
-    val completedHistory = history.filter { it.status == DownloadStatus.COMPLETE.name }
-    val failedHistory = history.filter { it.status == DownloadStatus.ERROR.name }
-    val fileTypes = history.groupBy { it.fileType.ifBlank { "unknown" } }.mapValues { it.value.size }
-    val recentSpeeds = history.sortedByDescending { it.finishedAtEpochMs }.take(12).map { it.averageSpeed }
-    val dailyHistory = history
-        .groupBy { SimpleDateFormat("MM-dd", Locale.US).format(Date(it.finishedAtEpochMs)) }
-        .entries
-        .sortedBy { it.key }
-        .takeLast(7)
-        .map { (label, entries) -> DailyHistoryPoint(label, entries.sumOf { it.totalBytes }) }
-
-    val totalCount = history.size + downloads.count { it.status == DownloadStatus.ACTIVE || it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED }
-    val activeCount = downloads.count { it.status == DownloadStatus.ACTIVE || it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED }
-    val completedCount = completedHistory.size
-    val failedCount = failedHistory.size
-
-    return StatsSnapshot(
-        totalBytesDownloaded = completedHistory.sumOf { it.totalBytes },
-        totalCount = totalCount,
-        completedCount = completedCount,
-        failedCount = failedCount,
-        activeCount = activeCount,
-        averageHistoricalSpeed = completedHistory.map { it.averageSpeed }.filter { it > 0 }.average().toLong(),
-        peakHistoricalSpeed = history.maxOfOrNull { it.averageSpeed } ?: 0L,
-        fileTypes = fileTypes,
-        recentSpeeds = recentSpeeds.ifEmpty { listOf(0L) },
-        dailyHistory = dailyHistory.ifEmpty { listOf(DailyHistoryPoint("today", 0L)) }
-    )
 }
 
 private fun formatDuration(durationMs: Long): String {
@@ -793,25 +1059,3 @@ private fun formatDuration(durationMs: Long): String {
 private fun formatTimestamp(epochMs: Long): String {
     return SimpleDateFormat("MMM d, HH:mm", Locale.US).format(Date(epochMs))
 }
-
-private data class StatsSnapshot(
-    val totalBytesDownloaded: Long,
-    val totalCount: Int,
-    val completedCount: Int,
-    val failedCount: Int,
-    val activeCount: Int,
-    val averageHistoricalSpeed: Long,
-    val peakHistoricalSpeed: Long,
-    val fileTypes: Map<String, Int>,
-    val recentSpeeds: List<Long>,
-    val dailyHistory: List<DailyHistoryPoint>
-) {
-    val completedRatio: Float get() = if (totalCount == 0) 0f else completedCount.toFloat() / totalCount
-    val failedRatio: Float get() = if (totalCount == 0) 0f else failedCount.toFloat() / totalCount
-    val activeRatio: Float get() = if (totalCount == 0) 0f else activeCount.toFloat() / totalCount
-}
-
-private data class DailyHistoryPoint(
-    val label: String,
-    val bytes: Long
-)
