@@ -1,9 +1,12 @@
 pluginManagement {
     repositories {
+        maven { url = uri("/home/efaz/Codes/chaquopy/maven") }
         google()
         mavenCentral()
         gradlePluginPortal()
-        maven { url = uri("https://chaquo.com/maven") }
+    }
+    plugins {
+        id("com.chaquo.python") version "17.0.1" apply false
     }
 }
 dependencyResolutionManagement {
@@ -11,7 +14,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://chaquo.com/maven") }
     }
 }
 

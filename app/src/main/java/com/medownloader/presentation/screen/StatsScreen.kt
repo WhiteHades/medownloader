@@ -554,7 +554,7 @@ private fun FileTypeRow(type: String, count: Int, total: Int) {
 }
 
 @Composable
-private fun DownloadPerformanceCard(download: Download) {
+private fun DownloadPerformanceCard(download: DownloadProgress) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = ExpressiveShapes.medium,

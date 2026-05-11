@@ -7,6 +7,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -353,4 +355,4 @@ class Aria2ProcessManager(
     fun getRpcSecret(): String = RPC_SECRET
 
     fun getRpcUrl(): String = "http://localhost:$RPC_PORT/jsonrpc"
-
+}

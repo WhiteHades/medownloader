@@ -61,7 +61,7 @@ class Aria2Engine(
                     download.isComplete -> DownloadStatus.COMPLETE
                     download.isPaused -> DownloadStatus.PAUSED
                     download.isActive -> DownloadStatus.ACTIVE
-                    download.isStopped -> DownloadStatus.STOPPED
+                    download.status == com.medownloader.data.model.DownloadStatus.REMOVED -> DownloadStatus.STOPPED
                     else -> DownloadStatus.QUEUED
                 }
 
@@ -72,7 +72,7 @@ class Aria2Engine(
                     downloadedBytes = download.completedLength,
                     totalBytes = download.totalLength,
                     speed = download.downloadSpeed,
-                    eta = download.eta
+                    eta = download.etaSeconds
                 ))
 
                 if (engineStatus == DownloadStatus.COMPLETE || engineStatus == DownloadStatus.STOPPED) {
@@ -122,7 +122,7 @@ class Aria2Engine(
                 download.isComplete -> DownloadStatus.COMPLETE
                 download.isPaused -> DownloadStatus.PAUSED
                 download.isActive -> DownloadStatus.ACTIVE
-                download.isStopped -> DownloadStatus.STOPPED
+                download.status == com.medownloader.data.model.DownloadStatus.REMOVED -> DownloadStatus.STOPPED
                 else -> DownloadStatus.QUEUED
             }
             DownloadProgress(
@@ -132,7 +132,7 @@ class Aria2Engine(
                 downloadedBytes = download.completedLength,
                 totalBytes = download.totalLength,
                 speed = download.downloadSpeed,
-                eta = download.eta
+                eta = download.etaSeconds
             )
         }
     }

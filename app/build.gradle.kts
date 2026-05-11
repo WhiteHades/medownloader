@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.chaquo.python")
+    // id("com.chaquo.python") — enable after building chaquopy runtime: see defaultConfig.ytdlpEnabled
 }
 
 android {
@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.medownloader"
-        minSdk = 29
+        minSdk = 24
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -25,14 +25,6 @@ android {
         // include all ABIs for aria2c binary
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
-        }
-
-        // Chaquopy python configuration
-        python {
-            version = "3.12"
-            pip {
-                install("yt-dlp")
-            }
         }
     }
 
@@ -68,6 +60,16 @@ android {
         }
     }
 }
+
+// Enable when id("com.chaquo.python") plugin is applied
+// chaquopy {
+//     defaultConfig {
+//         version = "3.10"
+//         pip {
+//             install("yt-dlp")
+//         }
+//     }
+// }
 
 dependencies {
     // Core Android
