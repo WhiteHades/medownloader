@@ -41,6 +41,7 @@
     <string name="settings_connection_limit">connection limit</string>
     <string name="settings_max_concurrent">max concurrent downloads</string>
     <string name="settings_download_location">download location</string>
+    <string name="settings_advanced_downloads">advanced downloads</string>
     <string name="settings_about">about</string>
     <string name="settings_version">version</string>
     <string name="settings_version_value">1.0.0</string>
@@ -48,6 +49,10 @@
     <string name="settings_powered_by_value">aria2c</string>
     <string name="settings_about_app">about medownloader</string>
     <string name="settings_about_desc">open source information</string>
+    <string name="settings_made_with_love">made with love</string>
+    <string name="settings_made_with_love_value">by Efaz</string>
+    <string name="settings_feature_requests">feature requests and bugs</string>
+    <string name="settings_feature_requests_value">open an issue on github</string>
     <string name="settings_pro_upgrade">upgrade to pro</string>
     <string name="settings_pro_desc">16× speed • 12 downloads • designer themes</string>
     <string name="settings_pro_user">pro user</string>
@@ -123,7 +128,9 @@
     <!-- Stats Screen -->
     <string name="stats_title">statistics</string>
     <string name="stats_overview">overview</string>
+    <string name="stats_overview_subtitle">live queue plus long-term download history</string>
     <string name="stats_total">total</string>
+    <string name="stats_completed_total">completed</string>
     <string name="stats_downloaded">downloaded</string>
     <string name="stats_status_distribution">download status</string>
     <string name="stats_failed">failed</string>
@@ -133,6 +140,16 @@
     <string name="stats_speed_history">recent speed history</string>
     <string name="stats_file_types">file types</string>
     <string name="stats_recent_performance">recent performance</string>
+    <string name="stats_recent_history">recent history</string>
+    <string name="stats_recent_history_subtitle">the latest completed or failed downloads saved on this device</string>
+    <string name="stats_history_trend">history trend</string>
+    <string name="stats_history_trend_subtitle">daily completed download volume across your saved history</string>
+    <string name="stats_live_queue">live queue</string>
+    <string name="stats_live_queue_subtitle">what is active right now in this app session</string>
+    <string name="stats_live_count_fmt">%1$d live</string>
+    <string name="stats_empty_history">no history yet</string>
+    <string name="stats_empty_history_subtitle">completed and failed downloads will start showing up here automatically</string>
+    <string name="stats_clear_history">clear history</string>
     <string name="stats_files_suffix">%1$d files</string>
     <string name="stats_unknown_type">unknown</string>
 

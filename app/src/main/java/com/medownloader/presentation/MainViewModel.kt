@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.medownloader.data.model.Aria2GlobalStat
 import com.medownloader.data.engine.DownloadProgress
 import com.medownloader.data.engine.DownloadStatus
+import com.medownloader.data.model.DownloadHistoryEntry
+import com.medownloader.data.repository.DownloadHistoryRepository
 import com.medownloader.data.repository.DownloadRepository
 import com.medownloader.data.repository.FileInfo
 import com.medownloader.data.repository.FreeTierLimits
@@ -22,6 +24,7 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(
     private val downloadRepository: DownloadRepository,
+    private val downloadHistoryRepository: DownloadHistoryRepository,
     private val premiumRepository: PremiumRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
@@ -34,6 +37,7 @@ class MainViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return MainViewModel(
                     downloadRepository = ServiceLocator.provideDownloadRepository(),
+                    downloadHistoryRepository = ServiceLocator.provideDownloadHistoryRepository(),
                     premiumRepository = ServiceLocator.providePremiumRepository(),
                     settingsRepository = ServiceLocator.provideSettingsRepository()
                 ) as T
@@ -78,11 +82,15 @@ class MainViewModel(
     val diskCacheMb = settingsRepository.diskCacheMb
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 32)
 
+    val history = downloadHistoryRepository.history
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val downloadDirUri = settingsRepository.downloadDirUri
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
         observeDownloads()
+        observeHistory()
         observeRuntimeLimits()
         checkPremiumOnStart()
     }
@@ -100,10 +108,9 @@ class MainViewModel(
             return
         }
 
-        // youtube blocked by google play rules
         if (!downloadRepository.isUrlAllowed(normalizedUrl)) {
             viewModelScope.launch {
-                _events.emit(UiEvent.ShowError("downloads from youtube are not allowed by google play policy"))
+                _events.emit(UiEvent.ShowError("enter a supported url (http, https, ftp, or magnet)"))
             }
             return
         }
@@ -213,6 +220,12 @@ class MainViewModel(
                 .onSuccess { stats ->
                     _uiState.update { it.copy(globalStats = stats) }
                 }
+        }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            downloadHistoryRepository.clear()
         }
     }
     
@@ -406,6 +419,14 @@ class MainViewModel(
         }
     }
 
+    private fun observeHistory() {
+        viewModelScope.launch {
+            history.collect { entries ->
+                _uiState.update { it.copy(history = entries) }
+            }
+        }
+    }
+
     private fun observeRuntimeLimits() {
         viewModelScope.launch {
             combine(maxConcurrent, connectionLimit) { concurrent, connections ->
@@ -433,6 +454,7 @@ data class MainUiState(
     val downloads: List<DownloadProgress> = emptyList(),
     val activeDownloads: List<DownloadProgress> = emptyList(),
     val completedDownloads: List<DownloadProgress> = emptyList(),
+    val history: List<DownloadHistoryEntry> = emptyList(),
     val globalStats: Aria2GlobalStat? = null,
     val isAddingDownload: Boolean = false,
     val isLoadingFileInfo: Boolean = false,

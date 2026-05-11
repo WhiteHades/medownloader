@@ -5,10 +5,12 @@ import android.util.Log
 import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.engine.*
 import com.medownloader.data.model.Aria2GlobalStat
+import com.medownloader.data.model.DownloadHistoryEntry
 import com.medownloader.data.source.Aria2ProcessManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -41,6 +43,7 @@ data class FileInfo(
 class DownloadRepositoryImpl(
     private val primaryEngine: YtDlpEngine,
     private val fallbackEngine: Aria2Engine,
+    private val historyRepository: DownloadHistoryRepository,
     private val rpcClient: Aria2RpcClient,
     private val processManager: Aria2ProcessManager,
     private val context: Context
@@ -48,11 +51,13 @@ class DownloadRepositoryImpl(
 
     companion object {
         private const val TAG = "DownloadRepository"
-        private val BLOCKED_DOMAINS = listOf("youtube.com", "youtu.be", "googlevideo.com", "ytimg.com")
     }
 
     private val activeDownloads = ConcurrentHashMap<String, Job>()
     private val downloadRegistry = ConcurrentHashMap<String, DownloadProgress>()
+    private val startedAtByGid = ConcurrentHashMap<String, Long>()
+    private val recordedTerminalStates = ConcurrentHashMap.newKeySet<String>()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val fileInfoHttpClient by lazy {
         okhttp3.OkHttpClient.Builder()
@@ -71,6 +76,7 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun stopEngine() {
+        activeDownloads.values.forEach { it.cancel() }
         rpcClient.shutdown()
         processManager.stop()
         activeDownloads.clear()
@@ -104,17 +110,24 @@ class DownloadRepositoryImpl(
             }
         }
 
-        kotlinx.coroutines.GlobalScope.launch {
+        activeDownloads[gid]?.cancel()
+        activeDownloads[gid] = scope.launch {
             progressFlow.collect { progress ->
+                startedAtByGid.putIfAbsent(progress.gid, System.currentTimeMillis())
+
                 if (progress.status == DownloadStatus.ERROR && route == EngineType.YT_DLP) {
                     Log.w(TAG, "yt-dlp emitted error, falling back to aria2c")
                     fallbackEngine.download(options).collect { fallbackProgress ->
                         downloadRegistry[fallbackProgress.gid] = fallbackProgress
+                        recordHistoryIfTerminal(fallbackProgress, options.url)
                     }
                     return@collect
                 }
+
                 downloadRegistry[progress.gid] = progress
+                recordHistoryIfTerminal(progress, options.url)
             }
+            activeDownloads.remove(gid)
         }
 
         return Result.success(gid)
@@ -129,6 +142,8 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun removeDownload(gid: String): Result<Unit> {
+        activeDownloads.remove(gid)?.cancel()
+        downloadRegistry.remove(gid)
         return fallbackEngine.stop(gid)
     }
 
@@ -152,8 +167,11 @@ class DownloadRepositoryImpl(
     }
 
     override fun isUrlAllowed(url: String): Boolean {
-        val lowercaseUrl = url.lowercase()
-        return BLOCKED_DOMAINS.none { domain -> lowercaseUrl.contains(domain) }
+        val scheme = url.trim().lowercase()
+        return scheme.startsWith("http://") ||
+            scheme.startsWith("https://") ||
+            scheme.startsWith("ftp://") ||
+            scheme.startsWith("magnet:")
     }
 
     override suspend fun fetchFileInfo(url: String): Result<FileInfo> = withContext(Dispatchers.IO) {
@@ -162,8 +180,15 @@ class DownloadRepositoryImpl(
                 return@withContext Result.failure(IllegalArgumentException("URL is empty"))
             }
 
-            if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("magnet:")) {
+            if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("ftp://") && !url.startsWith("magnet:")) {
                 return@withContext Result.failure(IllegalArgumentException("Invalid URL scheme"))
+            }
+
+            if (ProtocolRouter.route(url) == EngineType.YT_DLP && primaryEngine.isHealthy()) {
+                val extracted = primaryEngine.fetchInfo(url)
+                if (extracted.isSuccess) {
+                    return@withContext extracted
+                }
             }
 
             if (url.startsWith("magnet:")) {
@@ -288,5 +313,34 @@ class DownloadRepositoryImpl(
         } else {
             "download_${System.currentTimeMillis()}"
         }
+    }
+
+    private suspend fun recordHistoryIfTerminal(progress: DownloadProgress, url: String) {
+        if (progress.status != DownloadStatus.COMPLETE && progress.status != DownloadStatus.ERROR) {
+            return
+        }
+
+        val finishedAt = System.currentTimeMillis()
+        val startedAt = startedAtByGid.remove(progress.gid) ?: finishedAt
+        val terminalKey = "${progress.gid}:$startedAt:${progress.status.name}"
+        if (!recordedTerminalStates.add(terminalKey)) {
+            return
+        }
+
+        historyRepository.append(
+            DownloadHistoryEntry(
+                id = "${progress.gid}-${progress.status.name}-$finishedAt",
+                gid = progress.gid,
+                url = url,
+                filename = progress.filename,
+                status = progress.status.name,
+                totalBytes = progress.totalLength,
+                averageSpeed = progress.downloadSpeed,
+                startedAtEpochMs = startedAt,
+                finishedAtEpochMs = finishedAt,
+                durationMs = (finishedAt - startedAt).coerceAtLeast(0L),
+                fileType = progress.filename.substringAfterLast('.', "unknown").lowercase()
+            )
+        )
     }
 }

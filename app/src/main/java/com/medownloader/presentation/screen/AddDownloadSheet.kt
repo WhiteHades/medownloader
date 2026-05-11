@@ -481,7 +481,7 @@ private fun isSupportedUrl(url: String): Boolean {
         null
     }
 
-    return scheme == "http" || scheme == "https" || scheme == "magnet"
+    return scheme == "http" || scheme == "https" || scheme == "ftp" || scheme == "magnet"
 }
 
 private fun extractDomain(url: String): String {

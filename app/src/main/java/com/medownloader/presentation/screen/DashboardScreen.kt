@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -637,7 +638,7 @@ private fun FileTypeIcon(filename: String, status: DownloadStatus) {
             MaterialTheme.colorScheme.onPrimaryContainer
         )
         else -> Triple(
-            Icons.Outlined.InsertDriveFile,
+            Icons.AutoMirrored.Outlined.InsertDriveFile,
             MaterialTheme.colorScheme.surfaceContainerHigh,
             MaterialTheme.colorScheme.onSurfaceVariant
         )

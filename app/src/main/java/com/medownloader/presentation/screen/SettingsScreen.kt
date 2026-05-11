@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -21,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +56,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
+    val uriHandler = LocalUriHandler.current
     var showThemeDialog by remember { mutableStateOf(false) }
     var showConnectionsDialog by remember { mutableStateOf(false) }
     var showConcurrentDialog by remember { mutableStateOf(false) }
@@ -87,7 +90,7 @@ fun SettingsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back_content_desc))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back_content_desc))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -210,11 +213,11 @@ fun SettingsScreen(
                 }
             }
             
-            // Engine Section
+            // Advanced Downloads Section
             item {
                 SettingsSectionHeader(
-                    title = "Engine",
-                    icon = Icons.Outlined.Settings
+                    title = stringResource(R.string.settings_advanced_downloads),
+                    icon = Icons.Outlined.Tune
                 )
             }
             
@@ -289,9 +292,9 @@ fun SettingsScreen(
                     )
                     
                     SettingsItem(
-                        icon = Icons.Outlined.Code,
-                        title = stringResource(R.string.settings_powered_by),
-                        subtitle = stringResource(R.string.settings_powered_by_value),
+                        icon = Icons.Outlined.FavoriteBorder,
+                        title = stringResource(R.string.settings_made_with_love),
+                        subtitle = stringResource(R.string.settings_made_with_love_value),
                         onClick = { },
                         showChevron = false
                     )
@@ -302,12 +305,12 @@ fun SettingsScreen(
                     )
                     
                     SettingsItem(
-                        icon = Icons.Outlined.Info,
-                        title = stringResource(R.string.settings_about_app),
-                        subtitle = stringResource(R.string.settings_about_desc),
+                        icon = Icons.Outlined.BugReport,
+                        title = stringResource(R.string.settings_feature_requests),
+                        subtitle = stringResource(R.string.settings_feature_requests_value),
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                            // About info - could show dialog
+                            uriHandler.openUri("https://github.com/WhiteHades/medownloader/issues/new")
                         },
                         showChevron = true
                     )

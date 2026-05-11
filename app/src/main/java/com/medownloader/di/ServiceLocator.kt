@@ -5,6 +5,7 @@ import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.engine.Aria2Engine
 import com.medownloader.data.engine.YtDlpEngine
 import com.medownloader.data.repository.DownloadRepository
+import com.medownloader.data.repository.DownloadHistoryRepository
 import com.medownloader.data.repository.DownloadRepositoryImpl
 import com.medownloader.data.repository.PremiumRepository
 import com.medownloader.data.repository.PremiumRepositoryImpl
@@ -30,6 +31,9 @@ object ServiceLocator {
 
     @Volatile
     private var downloadRepository: DownloadRepository? = null
+
+    @Volatile
+    private var downloadHistoryRepository: DownloadHistoryRepository? = null
 
     @Volatile
     private var premiumRepository: PremiumRepository? = null
@@ -82,10 +86,19 @@ object ServiceLocator {
             downloadRepository ?: DownloadRepositoryImpl(
                 primaryEngine = provideYtDlpEngine(),
                 fallbackEngine = provideAria2Engine(),
+                historyRepository = provideDownloadHistoryRepository(),
                 rpcClient = provideRpcClient(),
                 processManager = provideProcessManager(),
                 context = requireNotNull(appContext)
             ).also { downloadRepository = it }
+        }
+    }
+
+    fun provideDownloadHistoryRepository(): DownloadHistoryRepository {
+        return downloadHistoryRepository ?: synchronized(this) {
+            downloadHistoryRepository ?: DownloadHistoryRepository(
+                requireNotNull(appContext)
+            ).also { downloadHistoryRepository = it }
         }
     }
 
@@ -112,6 +125,7 @@ object ServiceLocator {
             aria2Engine = null
             ytDlpEngine = null
             downloadRepository = null
+            downloadHistoryRepository = null
             premiumRepository = null
             settingsRepository = null
         }

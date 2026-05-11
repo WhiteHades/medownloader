@@ -3,6 +3,7 @@ package com.medownloader.data.engine
 import android.util.Log
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
+import com.medownloader.data.repository.FileInfo
 import com.medownloader.data.source.Aria2ProcessManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -120,6 +121,33 @@ class YtDlpEngine(
             true
         } catch (_: Exception) {
             false
+        }
+    }
+
+    suspend fun fetchInfo(url: String): Result<FileInfo> = withContext(Dispatchers.IO) {
+        runCatching {
+            val py = Python.getInstance()
+            val ytdlp = py.getModule("yt_dlp")
+            val ydl = ytdlp.callAttr(
+                "YoutubeDL",
+                mapOf("quiet" to true, "no_warnings" to true, "skip_download" to true).toPython(py)
+            )
+            val info = ydl.callAttr("extract_info", url, false)
+
+            val title = info.get("title")?.toString()?.ifBlank { null }
+            val ext = info.get("ext")?.toString()?.ifBlank { null }
+            val filesize = info.get("filesize")?.toLong()
+                ?: info.get("filesize_approx")?.toLong()
+
+            FileInfo(
+                filename = buildString {
+                    append(title ?: "download")
+                    if (ext != null && !endsWith(".$ext")) append('.').append(ext)
+                },
+                size = filesize,
+                resumable = true,
+                mimeType = null
+            )
         }
     }
 
