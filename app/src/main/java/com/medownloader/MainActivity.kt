@@ -131,6 +131,8 @@ class MainActivity : ComponentActivity() {
                                 onPauseClick = viewModel::pauseDownload,
                                 onResumeClick = viewModel::resumeDownload,
                                 onRemoveClick = viewModel::removeDownload,
+                                onRetryClick = viewModel::retryDownload,
+                                onDismissErrorClick = viewModel::dismissError,
                                 onSettingsClick = { navController.navigate("settings") },
                                 onStatsClick = { navController.navigate("stats") }
                             )
