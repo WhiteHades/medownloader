@@ -1,0 +1,93 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: build + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Grant execute bit on gradlew
+        run: chmod +x gradlew
+
+      - name: Compile debug Kotlin
+        run: ./gradlew :app:compileDebugKotlin --stacktrace
+
+      - name: Run debug unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Upload unit-test HTML report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  lint:
+    name: android lint (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # This project has pre-existing lint errors that are tracked separately
+    # (see README.md). We still want a report on every push, but we do not want
+    # lint failures to block PRs until the baseline is cleared.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute bit on gradlew
+        run: chmod +x gradlew
+
+      - name: Run lint
+        run: ./gradlew :app:lintDebug --stacktrace || true
+
+      - name: Upload lint HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
