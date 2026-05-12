@@ -11,8 +11,12 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel)"
 cd "$ROOT_DIR"
 
-JAVA_HOME_DEFAULT="/home/efaz/.local/share/mise/installs/java/17.0.2"
+JAVA_HOME_DEFAULT="/home/efaz/.local/share/mise/installs/java/21"
 export JAVA_HOME="${JAVA_HOME:-$JAVA_HOME_DEFAULT}"
+# Fall back to system Java 21 if the mise path doesn't exist
+if [ ! -d "$JAVA_HOME" ]; then
+  export JAVA_HOME="/usr/lib/jvm/java-21-openjdk"
+fi
 
 # Chaquopy 17.0.1 is a locally-built fork (not on the public chaquo maven).
 # If the user has it checked out at the conventional path and hasn't set
