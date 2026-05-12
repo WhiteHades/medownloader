@@ -10,13 +10,17 @@
 
 - **Engine Pool** — Manages N concurrent engine instances (yt-dlp × N + aria2c × N). One instance per download. Isolation means a crash in one download doesn't affect others.
 
-- **Protocol Router** — Engine selection logic: HTTP/HTTPS URLs → Primary Engine (yt-dlp), with Fallback Engine on failure. Magnet/torrent/metalink → Fallback Engine directly. Non-HTTP raw URLs (FTP, etc.) → Fallback Engine directly.
+- **Protocol Router** — Engine selection logic. Torrent-family URLs (magnet, `.torrent`, `btih`, `.metalink`, `ftp://`) go to Fallback Engine. `http(s)` URLs whose host matches a small whitelist of media platforms (youtube, vimeo, twitter, tiktok, twitch, soundcloud, reddit, instagram, facebook, dailymotion, bilibili, streamable, rumble, odysee) go to Primary Engine. Every other `http(s)` URL goes to Fallback Engine. See ADR-0002.
 
 - **Chaquopy Bridge** — The Python↔Kotlin integration layer. Allows calling yt-dlp's Python API from Kotlin, and registering Kotlin coroutine-based progress callbacks as Python callables.
 
 - **Download Session** — A single URL being actively downloaded. Owned by one engine instance in the pool. Has a unique identifier, progress state, and lifecycle (queued → active → paused → completed).
 
 - **Tier Limits** — RevenueCat-backed restrictions on concurrency, speed, and feature access. Enforced at the repository level, before engine allocation.
+
+- **Disk-Space Probe** — A seam (`DiskSpaceProbe`) that reports bytes available on the filesystem backing the downloads directory. The repository composes it with a pure `evaluateDiskSpace(...)` function to answer `Sufficient | Insufficient | Unknown`. The ViewModel uses this to fail fast on obviously-doomed downloads. See ADR-0004.
+
+- **Download History Entry** — A persisted record of a terminated download (COMPLETE or ERROR). Stored via `DownloadHistoryRepository` in DataStore. The Stats screen reads this as its source of truth; it is never re-derived from the aria2 session file.
 
 ## Architectural Principles
 
