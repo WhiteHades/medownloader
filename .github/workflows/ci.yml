@@ -37,6 +37,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -111,6 +116,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Cache vendored chaquopy maven
