@@ -18,6 +18,11 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
 
+// Process.isAlive() requires API 26; minSdk is 24. Use exitValue() which throws
+// IllegalThreadStateException when the process is still running.
+private val Process.isRunning: Boolean
+    get() = try { exitValue(); false } catch (_: IllegalThreadStateException) { true }
+
 class Aria2ProcessManager(
     private val context: Context,
     private val settingsRepository: SettingsRepository? = null
@@ -56,7 +61,7 @@ class Aria2ProcessManager(
                 return@withContext Result.success(Unit)
             }
 
-            if (_processState.value == ProcessState.Running && aria2Process?.isAlive == true) {
+            if (_processState.value == ProcessState.Running && aria2Process?.isRunning == true) {
                 Log.d(TAG, "Process already running, skipping start")
                 return@withContext Result.success(Unit)
             }
@@ -182,7 +187,7 @@ class Aria2ProcessManager(
             
             delay(500)
             
-            if (process.isAlive) {
+            if (process.isRunning) {
                 _processState.value = ProcessState.Running
                 restartCount = 0
                 startWatchdog()
@@ -262,12 +267,16 @@ class Aria2ProcessManager(
                 saveSessionViaRpc()
                 delay(1000)
                 
-                if (process.isAlive) {
+                if (process.isRunning) {
                     process.destroy()
                     delay(500)
                     
-                    if (process.isAlive) {
-                        process.destroyForcibly()
+                    if (process.isRunning) {
+                        if (android.os.Build.VERSION.SDK_INT >= 26) {
+                            process.destroyForcibly()
+                        } else {
+                            process.destroy()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -339,7 +348,7 @@ class Aria2ProcessManager(
                 delay(WATCHDOG_INTERVAL_MS)
 
                 val process = aria2Process
-                if (process == null || !process.isAlive) {
+                if (process == null || !process.isRunning) {
                     Log.w(TAG, "aria2c process died unexpectedly")
                     
                     if (restartCount < MAX_RESTART_ATTEMPTS) {

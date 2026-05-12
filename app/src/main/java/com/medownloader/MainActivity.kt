@@ -268,7 +268,11 @@ class MainActivity : ComponentActivity() {
         val serviceIntent = Intent(this, DownloadService::class.java).apply {
             action = DownloadService.ACTION_START_ENGINE
         }
-        startForegroundService(serviceIntent)
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
     }
 
     private fun showAddDownloadDialog() {
