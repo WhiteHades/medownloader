@@ -1,26 +1,180 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# -----------------------------------------------------------------------------
+# Helper for working with the local android emulator during development.
+#
+# Subcommands:
+#   boot     bring up the emulator (resizing userdata first if needed)
+#   install  build and install the debug apk
+#   launch   launch the app on the running emulator
+#   logs     stream filtered logcat
+#   resize   ensure the AVD's userdata partition is large enough, stopping the
+#            emulator first if it is running
+#   all      boot + install + launch (default)
+#
+# Storage sizing:
+#   The userdata partition size is read from the AVD's config.ini
+#   (`disk.dataPartition.size`). A fresh AVD defaults to ~6 GB which is not
+#   enough for large (>5 GB) downloads. This script raises it to
+#   $MD_USERDATA_SIZE (default 128G) on boot.
+# -----------------------------------------------------------------------------
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SDK_DIR="${ANDROID_HOME:-/home/efaz/Android/Sdk}"
 ADB="$SDK_DIR/platform-tools/adb"
 EMU="$SDK_DIR/emulator/emulator"
-AVD_NAME="${MD_AVD_NAME:-Medium_Phone_API_36.1}"
+AVD_NAME="${MD_AVD_NAME:-Medium_Phone}"
 AVD_HOME="${ANDROID_AVD_HOME:-/home/efaz/.config/.android/avd}"
 SDK_HOME="${ANDROID_SDK_HOME:-/home/efaz/.config/.android}"
 JAVA_HOME_DEFAULT="/home/efaz/.local/share/mise/installs/java/17.0.2"
 JAVA_HOME="${JAVA_HOME:-$JAVA_HOME_DEFAULT}"
 APP_ID="com.medownloader"
 
-MODE="${1:-all}"
+# Target userdata size. Accepts a G- or M-suffixed value (e.g. 128G, 64G, 32768M).
+MD_USERDATA_SIZE="${MD_USERDATA_SIZE:-128G}"
+
+log() {
+  echo "[test-android] $*" >&2
+}
+
+# -----------------------------------------------------------------------------
+# Resolve the .avd/ folder for $AVD_NAME. The .ini file next to the folder is
+# a pointer ("path=..."); we read that to find the real folder. If no .ini
+# exists for the chosen AVD name but a folder does, we create the .ini.
+# -----------------------------------------------------------------------------
+resolve_avd_dir() {
+  local ini="$AVD_HOME/$AVD_NAME.ini"
+  local folder="$AVD_HOME/$AVD_NAME.avd"
+
+  if [ -f "$ini" ]; then
+    local path
+    path="$(grep -E '^path=' "$ini" | head -1 | cut -d= -f2- | tr -d '\r')"
+    if [ -n "$path" ] && [ -d "$path" ]; then
+      echo "$path"
+      return 0
+    fi
+  fi
+
+  if [ -d "$folder" ]; then
+    if [ ! -f "$ini" ]; then
+      log "creating missing ini pointer: $ini -> $folder"
+      cat >"$ini" <<EOF
+avd.ini.encoding=UTF-8
+path=$folder
+path.rel=avd/$AVD_NAME.avd
+target=android-36.1
+EOF
+    fi
+    echo "$folder"
+    return 0
+  fi
+
+  log "error: no AVD found for name '$AVD_NAME' under $AVD_HOME"
+  log "available:"
+  ls "$AVD_HOME" | grep -E '\.avd$' >&2 || true
+  exit 1
+}
+
+# Parse sizes like "128G", "64G", "32768M" to bytes.
+size_to_bytes() {
+  local s="$1"
+  case "$s" in
+    *G|*g) echo $(( ${s%[Gg]} * 1024 * 1024 * 1024 )) ;;
+    *M|*m) echo $(( ${s%[Mm]} * 1024 * 1024 )) ;;
+    *K|*k) echo $(( ${s%[Kk]} * 1024 )) ;;
+    *)     echo "$s" ;;
+  esac
+}
+
+# Return "1" if userdata config is already >= target.
+userdata_is_large_enough() {
+  local avd_dir="$1"
+  local cfg="$avd_dir/config.ini"
+  local current
+  current="$(grep -E '^disk\.dataPartition\.size=' "$cfg" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+  if [ -z "$current" ]; then
+    echo "0"
+    return
+  fi
+  local cur_b target_b
+  cur_b="$(size_to_bytes "$current")"
+  target_b="$(size_to_bytes "$MD_USERDATA_SIZE")"
+  if [ "$cur_b" -ge "$target_b" ]; then
+    echo "1"
+  else
+    echo "0"
+  fi
+}
+
+# Rewrite disk.dataPartition.size in config.ini (idempotent).
+set_userdata_size() {
+  local avd_dir="$1"
+  local cfg="$avd_dir/config.ini"
+  if [ ! -f "$cfg" ]; then
+    log "error: $cfg not found"
+    exit 1
+  fi
+  if grep -qE '^disk\.dataPartition\.size=' "$cfg"; then
+    # replace in place
+    sed -i.bak -E "s|^disk\.dataPartition\.size=.*|disk.dataPartition.size=$MD_USERDATA_SIZE|" "$cfg"
+  else
+    echo "disk.dataPartition.size=$MD_USERDATA_SIZE" >>"$cfg"
+  fi
+  log "userdata partition target: $MD_USERDATA_SIZE ($cfg)"
+}
+
+emulator_running() {
+  "$ADB" devices 2>/dev/null | grep -q '^emulator-'
+}
+
+stop_emulator() {
+  if ! emulator_running; then
+    return 0
+  fi
+  log "stopping emulator (needed for userdata resize)"
+  "$ADB" emu kill >/dev/null 2>&1 || true
+  # wait up to 30s
+  for _ in $(seq 1 30); do
+    emulator_running || return 0
+    sleep 1
+  done
+  log "warn: emulator did not shut down cleanly"
+}
+
+ensure_userdata_size() {
+  local avd_dir
+  avd_dir="$(resolve_avd_dir)"
+
+  if [ "$(userdata_is_large_enough "$avd_dir")" = "1" ]; then
+    log "userdata already >= $MD_USERDATA_SIZE, no resize needed"
+    return 0
+  fi
+
+  if emulator_running; then
+    log "userdata is smaller than $MD_USERDATA_SIZE; stopping emulator to resize"
+    stop_emulator
+  fi
+
+  set_userdata_size "$avd_dir"
+
+  # Remove stale userdata-qemu.img so the new size takes effect on next boot.
+  # (It is regenerated from userdata.img.)
+  if [ -f "$avd_dir/userdata-qemu.img" ]; then
+    log "removing stale userdata-qemu.img so new size applies"
+    rm -f "$avd_dir/userdata-qemu.img" "$avd_dir/userdata-qemu.img.qcow2" 2>/dev/null || true
+  fi
+}
 
 boot_emulator() {
-  if "$ADB" devices | grep -q '^emulator-'; then
-    echo "emulator already running"
+  ensure_userdata_size
+
+  if emulator_running; then
+    log "emulator already running"
     return
   fi
 
-  echo "starting emulator: $AVD_NAME"
+  log "starting emulator: $AVD_NAME"
   ANDROID_AVD_HOME="$AVD_HOME" \
   ANDROID_SDK_HOME="$SDK_HOME" \
   nohup "$EMU" \
@@ -31,22 +185,23 @@ boot_emulator() {
 }
 
 wait_for_boot() {
-  echo "waiting for device"
+  log "waiting for device"
   "$ADB" wait-for-device
   until [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
     sleep 3
   done
-  echo "device booted"
+  log "device booted"
+  "$ADB" shell df -h /data /storage/emulated 2>/dev/null | head -5 >&2 || true
 }
 
 build_and_install() {
-  echo "building and installing debug apk"
+  log "building and installing debug apk"
   cd "$ROOT_DIR"
   JAVA_HOME="$JAVA_HOME" ANDROID_HOME="$SDK_DIR" ./gradlew installDebug
 }
 
 launch_app() {
-  echo "launching $APP_ID"
+  log "launching $APP_ID"
   "$ADB" shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1 >/dev/null
 }
 
@@ -54,6 +209,7 @@ show_logs() {
   "$ADB" logcat | grep -E "MeDownloaderApp|YtDlpEngine|DownloadRepository|DownloadService|Aria2Native|Aria2ProcessManager"
 }
 
+MODE="${1:-all}"
 case "$MODE" in
   boot)
     boot_emulator
@@ -68,6 +224,10 @@ case "$MODE" in
   logs)
     show_logs
     ;;
+  resize)
+    ensure_userdata_size
+    log "resize complete. next boot will allocate $MD_USERDATA_SIZE userdata."
+    ;;
   all)
     boot_emulator
     wait_for_boot
@@ -75,7 +235,11 @@ case "$MODE" in
     launch_app
     ;;
   *)
-    echo "usage: ./scripts/test-android [boot|install|launch|logs|all]"
+    echo "usage: ./scripts/test-android [boot|install|launch|logs|resize|all]"
+    echo "env overrides:"
+    echo "  MD_AVD_NAME (default Medium_Phone)"
+    echo "  MD_USERDATA_SIZE (default 128G)"
+    echo "  ANDROID_HOME, ANDROID_AVD_HOME, ANDROID_SDK_HOME, JAVA_HOME"
     exit 1
     ;;
 esac
