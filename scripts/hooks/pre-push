@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# pre-push hook installed by scripts/install-hooks.
+#
+# Runs the project's deterministic verification gates (compile + unit tests)
+# before allowing a push. Mirrors the same gates used in GitHub Actions so
+# CI and local diverge as little as possible.
+#
+# Skip this hook (at your own risk) with `git push --no-verify`.
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+JAVA_HOME_DEFAULT="/home/efaz/.local/share/mise/installs/java/17.0.2"
+export JAVA_HOME="${JAVA_HOME:-$JAVA_HOME_DEFAULT}"
+
+echo "[pre-push] compileDebugKotlin"
+./gradlew :app:compileDebugKotlin --console=plain --quiet
+
+echo "[pre-push] testDebugUnitTest"
+./gradlew :app:testDebugUnitTest --console=plain --quiet
+
+echo "[pre-push] ok"
