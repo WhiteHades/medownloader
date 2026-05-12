@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.chaquo.python")
+    id("com.chaquo.python") version "17.0.1"
 }
 
 android {
@@ -71,6 +71,8 @@ chaquopy {
 }
 
 dependencies {
+    implementation(project(":core"))
+
     // Core Android
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
