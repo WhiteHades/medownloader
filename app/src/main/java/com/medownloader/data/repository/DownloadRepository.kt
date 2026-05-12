@@ -31,6 +31,7 @@ interface DownloadRepository {
     fun isUrlAllowed(url: String): Boolean
     suspend fun fetchFileInfo(url: String): Result<FileInfo>
     suspend fun applyRuntimeLimits(maxConcurrent: Int, connectionLimit: Int): Result<Unit>
+    fun checkDiskSpaceFor(expectedBytes: Long?): com.medownloader.util.DiskSpaceCheck
 }
 
 data class FileInfo(
@@ -46,7 +47,9 @@ class DownloadRepositoryImpl(
     private val historyRepository: DownloadHistoryRepository,
     private val rpcClient: Aria2RpcClient,
     private val processManager: Aria2ProcessManager,
-    private val context: Context
+    private val context: Context,
+    private val diskSpaceProbe: com.medownloader.util.DiskSpaceProbe =
+        com.medownloader.util.AndroidDiskSpaceProbe
 ) : DownloadRepository {
 
     companion object {
@@ -288,6 +291,19 @@ class DownloadRepositoryImpl(
                 "split" to safeConnectionLimit.toString()
             )
         ).map { }
+    }
+
+    override fun checkDiskSpaceFor(expectedBytes: Long?): com.medownloader.util.DiskSpaceCheck {
+        val dir = android.os.Environment.getExternalStoragePublicDirectory(
+            android.os.Environment.DIRECTORY_DOWNLOADS
+        )
+        val target = java.io.File(dir, "meDownloader").takeIf { it.exists() }
+            ?: dir
+        val free = diskSpaceProbe.availableBytes(target.absolutePath)
+        return com.medownloader.util.evaluateDiskSpace(
+            freeBytes = free,
+            expectedBytes = expectedBytes
+        )
     }
 
     private fun extractFilenameFromUrl(url: String): String {
