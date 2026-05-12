@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Install project-local git hooks from scripts/hooks/ into .git/hooks/.
+#
+# We deliberately do NOT use `git config core.hooksPath` because that breaks
+# worktrees and some IDEs. Instead we symlink files, which is reversible and
+# visible via `ls -la .git/hooks`.
+#
+# Re-run this any time you add a new hook under scripts/hooks/.
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+SRC_DIR="$ROOT_DIR/scripts/hooks"
+DST_DIR="$ROOT_DIR/.git/hooks"
+
+if [ ! -d "$SRC_DIR" ]; then
+  echo "[install-hooks] no hooks directory at $SRC_DIR" >&2
+  exit 1
+fi
+
+mkdir -p "$DST_DIR"
+
+for hook in "$SRC_DIR"/*; do
+  [ -f "$hook" ] || continue
+  name="$(basename "$hook")"
+  target="$DST_DIR/$name"
+  chmod +x "$hook"
+  ln -sf "$hook" "$target"
+  echo "[install-hooks] linked $target -> $hook"
+done
+
+echo "[install-hooks] done. skip hooks at your own risk with --no-verify."
