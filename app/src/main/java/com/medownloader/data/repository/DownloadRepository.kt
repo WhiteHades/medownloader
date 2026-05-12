@@ -7,16 +7,21 @@ import com.medownloader.data.engine.*
 import com.medownloader.data.model.Aria2GlobalStat
 import com.medownloader.data.model.DownloadHistoryEntry
 import com.medownloader.data.source.Aria2ProcessManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 interface DownloadRepository {
     suspend fun ensureEngineRunning(): Result<Unit>
@@ -45,22 +50,39 @@ class DownloadRepositoryImpl(
     private val primaryEngine: YtDlpEngine,
     private val fallbackEngine: Aria2Engine,
     private val historyRepository: DownloadHistoryRepository,
+    // rpcClient kept only for getGlobalStats + applyRuntimeLimits — no download ops use it directly
     private val rpcClient: Aria2RpcClient,
     private val processManager: Aria2ProcessManager,
     private val context: Context,
+    private val settingsRepository: SettingsRepository? = null,
     private val diskSpaceProbe: com.medownloader.util.DiskSpaceProbe =
         com.medownloader.util.AndroidDiskSpaceProbe
 ) : DownloadRepository {
 
     companion object {
         private const val TAG = "DownloadRepository"
+        private const val DEFAULT_MAX_CONCURRENT = 3
     }
 
-    private val activeDownloads = ConcurrentHashMap<String, Job>()
+    // Which engine is currently handling a given GID
+    private enum class EngineOwner { YT_DLP, ARIA2C }
+    private data class ActiveEntry(val job: Job, val owner: EngineOwner)
+    private data class PendingDownload(val gid: String, val options: DownloadOptions, val route: EngineType)
+
+    private val activeDownloads = ConcurrentHashMap<String, ActiveEntry>()
     private val downloadRegistry = ConcurrentHashMap<String, DownloadProgress>()
     private val startedAtByGid = ConcurrentHashMap<String, Long>()
     private val recordedTerminalStates = ConcurrentHashMap.newKeySet<String>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // Reactive state — updated on every progress event, no polling
+    private val _downloadsFlow = MutableStateFlow<List<DownloadProgress>>(emptyList())
+
+    // Concurrency pool
+    private val poolMutex = Mutex()
+    private val activeCount = AtomicInteger(0)
+    @Volatile private var maxConcurrent = DEFAULT_MAX_CONCURRENT
+    private val pendingQueue = ArrayDeque<PendingDownload>()
 
     private val fileInfoHttpClient by lazy {
         okhttp3.OkHttpClient.Builder()
@@ -68,6 +90,18 @@ class DownloadRepositoryImpl(
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .build()
+    }
+
+    init {
+        // React to settings changes for concurrency cap
+        settingsRepository?.let { settings ->
+            scope.launch {
+                settings.maxConcurrentDownloads.collect { max ->
+                    maxConcurrent = max.coerceAtLeast(1)
+                    drainQueue()
+                }
+            }
+        }
     }
 
     override suspend fun ensureEngineRunning(): Result<Unit> {
@@ -79,11 +113,14 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun stopEngine() {
-        activeDownloads.values.forEach { it.cancel() }
+        activeDownloads.values.forEach { it.job.cancel() }
         rpcClient.shutdown()
         processManager.stop()
         activeDownloads.clear()
         downloadRegistry.clear()
+        pendingQueue.clear()
+        activeCount.set(0)
+        _downloadsFlow.value = emptyList()
     }
 
     override suspend fun addDownload(url: String, filename: String?): Result<String> {
@@ -97,77 +134,184 @@ class DownloadRepositoryImpl(
 
         ensureEngineRunning().onFailure { return Result.failure(it) }
 
-        val progressFlow = when (route) {
-            EngineType.ARIA2C -> {
-                Log.d(TAG, "routing to aria2c directly: $url")
-                fallbackEngine.download(options)
-            }
-            EngineType.YT_DLP -> {
-                Log.d(TAG, "trying yt-dlp: $url")
-                try {
-                    primaryEngine.download(options)
-                } catch (e: Exception) {
-                    Log.w(TAG, "yt-dlp failed, falling back to aria2c: ${e.message}")
-                    fallbackEngine.download(options)
-                }
+        val shouldLaunch = poolMutex.withLock {
+            if (activeCount.get() < maxConcurrent) {
+                activeCount.incrementAndGet()
+                true
+            } else {
+                pendingQueue.addLast(PendingDownload(gid, options, route))
+                false
             }
         }
 
-        activeDownloads[gid]?.cancel()
-        activeDownloads[gid] = scope.launch {
-            progressFlow.collect { progress ->
-                startedAtByGid.putIfAbsent(progress.gid, System.currentTimeMillis())
-
-                if (progress.status == DownloadStatus.ERROR && route == EngineType.YT_DLP) {
-                    Log.w(TAG, "yt-dlp emitted error, falling back to aria2c")
-                    fallbackEngine.download(options).collect { fallbackProgress ->
-                        downloadRegistry[fallbackProgress.gid] = fallbackProgress
-                        recordHistoryIfTerminal(fallbackProgress, options.url)
-                    }
-                    return@collect
-                }
-
-                downloadRegistry[progress.gid] = progress
-                recordHistoryIfTerminal(progress, options.url)
-            }
-            activeDownloads.remove(gid)
+        if (shouldLaunch) {
+            launchDownload(gid, options, route)
+        } else {
+            // Show a QUEUED placeholder so the UI knows about it
+            downloadRegistry[gid] = DownloadProgress(
+                gid = gid,
+                status = DownloadStatus.QUEUED,
+                filename = options.filename ?: url,
+                downloadedBytes = 0,
+                totalBytes = 0,
+                speed = 0,
+                eta = 0
+            )
+            publishState()
         }
 
         return Result.success(gid)
     }
 
+    private fun launchDownload(gid: String, options: DownloadOptions, route: EngineType) {
+        activeDownloads[gid]?.job?.cancel()
+
+        val job = scope.launch {
+            try {
+                collectDownload(gid, options, route)
+            } finally {
+                activeCount.decrementAndGet()
+                activeDownloads.remove(gid)
+                drainQueue()
+            }
+        }
+
+        activeDownloads[gid] = ActiveEntry(job, engineOwnerFor(route))
+    }
+
+    private suspend fun collectDownload(gid: String, options: DownloadOptions, route: EngineType) {
+        val flow = when (route) {
+            EngineType.ARIA2C -> {
+                Log.d(TAG, "routing to aria2c: $gid")
+                fallbackEngine.download(options)
+            }
+            EngineType.YT_DLP -> {
+                Log.d(TAG, "trying yt-dlp: $gid")
+                primaryEngine.download(options)
+            }
+        }
+
+        var switchedToFallback = false
+
+        try {
+            flow.collect { progress ->
+                startedAtByGid.putIfAbsent(progress.gid, System.currentTimeMillis())
+
+                // yt-dlp emitted an ERROR → switch to aria2c inline
+                if (!switchedToFallback && progress.status == DownloadStatus.ERROR && route == EngineType.YT_DLP) {
+                    Log.w(TAG, "yt-dlp error event, falling back to aria2c: $gid")
+                    switchedToFallback = true
+                    activeDownloads[gid]?.let { activeDownloads[gid] = it.copy(owner = EngineOwner.ARIA2C) }
+                    fallbackEngine.download(options).collect { fp ->
+                        downloadRegistry[fp.gid] = fp
+                        publishState()
+                        recordHistoryIfTerminal(fp, options.url)
+                    }
+                    return@collect
+                }
+
+                downloadRegistry[progress.gid] = progress
+                publishState()
+                recordHistoryIfTerminal(progress, options.url)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // yt-dlp threw an exception → try aria2c fallback
+            if (route == EngineType.YT_DLP && !switchedToFallback) {
+                Log.w(TAG, "yt-dlp threw, falling back to aria2c: $gid — ${e.message}")
+                activeDownloads[gid]?.let { activeDownloads[gid] = it.copy(owner = EngineOwner.ARIA2C) }
+                try {
+                    fallbackEngine.download(options).collect { fp ->
+                        downloadRegistry[fp.gid] = fp
+                        publishState()
+                        recordHistoryIfTerminal(fp, options.url)
+                    }
+                } catch (fe: CancellationException) {
+                    throw fe
+                } catch (fe: Exception) {
+                    emitError(gid, options, fe)
+                }
+            } else {
+                emitError(gid, options, e)
+            }
+        }
+    }
+
+    private suspend fun emitError(gid: String, options: DownloadOptions, e: Exception) {
+        val errProgress = DownloadProgress(
+            gid = gid,
+            status = DownloadStatus.ERROR,
+            filename = options.filename ?: options.url,
+            downloadedBytes = 0,
+            totalBytes = 0,
+            speed = 0,
+            eta = 0,
+            errorMessage = e.message
+        )
+        downloadRegistry[gid] = errProgress
+        publishState()
+        recordHistoryIfTerminal(errProgress, options.url)
+    }
+
+    private fun publishState() {
+        _downloadsFlow.value = downloadRegistry.values.toList()
+    }
+
+    private suspend fun drainQueue() {
+        while (true) {
+            val next = poolMutex.withLock {
+                if (activeCount.get() < maxConcurrent && pendingQueue.isNotEmpty()) {
+                    activeCount.incrementAndGet()
+                    pendingQueue.removeFirst()
+                } else null
+            } ?: break
+            launchDownload(next.gid, next.options, next.route)
+        }
+    }
+
+    private fun engineOwnerFor(route: EngineType) = when (route) {
+        EngineType.YT_DLP -> EngineOwner.YT_DLP
+        EngineType.ARIA2C -> EngineOwner.ARIA2C
+    }
+
     override suspend fun pauseDownload(gid: String): Result<Unit> {
-        return fallbackEngine.pause(gid)
+        return when (activeDownloads[gid]?.owner) {
+            EngineOwner.YT_DLP -> Result.failure(
+                UnsupportedOperationException("yt-dlp downloads cannot be paused")
+            )
+            EngineOwner.ARIA2C, null -> fallbackEngine.pause(gid)
+        }
     }
 
     override suspend fun resumeDownload(gid: String): Result<Unit> {
-        return fallbackEngine.resume(gid)
+        return when (activeDownloads[gid]?.owner) {
+            EngineOwner.YT_DLP -> Result.failure(
+                UnsupportedOperationException("yt-dlp downloads cannot be resumed")
+            )
+            EngineOwner.ARIA2C, null -> fallbackEngine.resume(gid)
+        }
     }
 
     override suspend fun removeDownload(gid: String): Result<Unit> {
-        activeDownloads.remove(gid)?.cancel()
+        // Remove from pending queue first
+        poolMutex.withLock {
+            pendingQueue.removeAll { it.gid == gid }
+        }
+        activeDownloads.remove(gid)?.job?.cancel()
         downloadRegistry.remove(gid)
+        publishState()
+        // Best-effort stop on aria2c side (may already be gone)
         return fallbackEngine.stop(gid)
     }
 
-    override fun observeAllDownloads(): Flow<List<DownloadProgress>> = flow {
-        while (true) {
-            val snapshots = downloadRegistry.values.toList()
-            emit(snapshots)
-            kotlinx.coroutines.delay(1000)
-        }
-    }
+    // Reactive — no polling, updated on every progress event
+    override fun observeAllDownloads(): Flow<List<DownloadProgress>> = _downloadsFlow.asStateFlow()
 
-    override fun observeDownload(gid: String): Flow<DownloadProgress> = flow {
-        while (true) {
-            downloadRegistry[gid]?.let { emit(it) }
-            kotlinx.coroutines.delay(500)
-        }
-    }
+    override fun observeDownload(gid: String): Flow<DownloadProgress> =
+        _downloadsFlow.mapNotNull { list -> list.firstOrNull { it.gid == gid } }
 
-    override suspend fun getGlobalStats(): Result<Aria2GlobalStat> {
-        return rpcClient.getGlobalStat()
-    }
+    override suspend fun getGlobalStats(): Result<Aria2GlobalStat> = rpcClient.getGlobalStat()
 
     override fun isUrlAllowed(url: String): Boolean {
         val scheme = url.trim().lowercase()
@@ -183,19 +327,20 @@ class DownloadRepositoryImpl(
                 return@withContext Result.failure(IllegalArgumentException("URL is empty"))
             }
 
-            if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("ftp://") && !url.startsWith("magnet:")) {
+            if (!url.startsWith("http://") && !url.startsWith("https://") &&
+                !url.startsWith("ftp://") && !url.startsWith("magnet:")
+            ) {
                 return@withContext Result.failure(IllegalArgumentException("Invalid URL scheme"))
             }
 
             if (ProtocolRouter.route(url) == EngineType.YT_DLP && primaryEngine.isHealthy()) {
                 val extracted = primaryEngine.fetchInfo(url)
-                if (extracted.isSuccess) {
-                    return@withContext extracted
-                }
+                if (extracted.isSuccess) return@withContext extracted
             }
 
             if (url.startsWith("magnet:")) {
-                val displayName = url.substringAfter("dn=", "").substringBefore("&").ifEmpty { "magnet_download" }
+                val displayName = url.substringAfter("dn=", "").substringBefore("&")
+                    .ifEmpty { "magnet_download" }
                 return@withContext Result.success(
                     FileInfo(
                         filename = java.net.URLDecoder.decode(displayName, "UTF-8"),
@@ -209,7 +354,10 @@ class DownloadRepositoryImpl(
             var request = okhttp3.Request.Builder()
                 .url(url)
                 .head()
-                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .addHeader(
+                    "User-Agent",
+                    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                )
                 .build()
 
             var response = fileInfoHttpClient.newCall(request).execute()
@@ -221,7 +369,10 @@ class DownloadRepositoryImpl(
                     .url(url)
                     .get()
                     .addHeader("Range", "bytes=0-0")
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .addHeader(
+                        "User-Agent",
+                        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                    )
                     .build()
                 response = fileInfoHttpClient.newCall(request).execute()
                 responseCode = response.code
@@ -244,7 +395,6 @@ class DownloadRepositoryImpl(
                 ?: response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull()
             val contentType = response.header("Content-Type")
             val acceptRanges = response.header("Accept-Ranges")
-
             response.close()
 
             val extractedFilename = contentDisposition
@@ -277,8 +427,9 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun applyRuntimeLimits(maxConcurrent: Int, connectionLimit: Int): Result<Unit> {
-        val safeMaxConcurrent = maxConcurrent.coerceIn(1, 16)
-        val safeConnectionLimit = connectionLimit.coerceIn(1, 16)
+        val safeMax = maxConcurrent.coerceIn(1, 16)
+        val safeConn = connectionLimit.coerceIn(1, 16)
+        this.maxConcurrent = safeMax
 
         if (processManager.processState.value != Aria2ProcessManager.ProcessState.Running) {
             return Result.success(Unit)
@@ -286,9 +437,9 @@ class DownloadRepositoryImpl(
 
         return rpcClient.changeGlobalOption(
             mapOf(
-                "max-concurrent-downloads" to safeMaxConcurrent.toString(),
-                "max-connection-per-server" to safeConnectionLimit.toString(),
-                "split" to safeConnectionLimit.toString()
+                "max-concurrent-downloads" to safeMax.toString(),
+                "max-connection-per-server" to safeConn.toString(),
+                "split" to safeConn.toString()
             )
         ).map { }
     }
@@ -297,13 +448,9 @@ class DownloadRepositoryImpl(
         val dir = android.os.Environment.getExternalStoragePublicDirectory(
             android.os.Environment.DIRECTORY_DOWNLOADS
         )
-        val target = java.io.File(dir, "meDownloader").takeIf { it.exists() }
-            ?: dir
+        val target = java.io.File(dir, "meDownloader").takeIf { it.exists() } ?: dir
         val free = diskSpaceProbe.availableBytes(target.absolutePath)
-        return com.medownloader.util.evaluateDiskSpace(
-            freeBytes = free,
-            expectedBytes = expectedBytes
-        )
+        return com.medownloader.util.evaluateDiskSpace(freeBytes = free, expectedBytes = expectedBytes)
     }
 
     private fun extractFilenameFromUrl(url: String): String {
@@ -312,36 +459,24 @@ class DownloadRepositoryImpl(
             .takeIf { it.isNotEmpty() }
 
         if (filenameParam != null) {
-            return try {
-                java.net.URLDecoder.decode(filenameParam, "UTF-8")
-            } catch (e: Exception) {
-                filenameParam
-            }
+            return try { java.net.URLDecoder.decode(filenameParam, "UTF-8") } catch (e: Exception) { filenameParam }
         }
 
         val pathPart = url.substringAfterLast('/').substringBefore('?').substringBefore('#')
         return if (pathPart.isNotEmpty() && pathPart.length < 200 && pathPart.contains('.')) {
-            try {
-                java.net.URLDecoder.decode(pathPart, "UTF-8")
-            } catch (e: Exception) {
-                pathPart
-            }
+            try { java.net.URLDecoder.decode(pathPart, "UTF-8") } catch (e: Exception) { pathPart }
         } else {
             "download_${System.currentTimeMillis()}"
         }
     }
 
     private suspend fun recordHistoryIfTerminal(progress: DownloadProgress, url: String) {
-        if (progress.status != DownloadStatus.COMPLETE && progress.status != DownloadStatus.ERROR) {
-            return
-        }
+        if (progress.status != DownloadStatus.COMPLETE && progress.status != DownloadStatus.ERROR) return
 
         val finishedAt = System.currentTimeMillis()
         val startedAt = startedAtByGid.remove(progress.gid) ?: finishedAt
         val terminalKey = "${progress.gid}:$startedAt:${progress.status.name}"
-        if (!recordedTerminalStates.add(terminalKey)) {
-            return
-        }
+        if (!recordedTerminalStates.add(terminalKey)) return
 
         historyRepository.append(
             DownloadHistoryEntry(
