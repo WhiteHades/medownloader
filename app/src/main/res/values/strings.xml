@@ -4,6 +4,10 @@
     <!-- Dashboard -->
     <string name="dashboard_active">active</string>
     <string name="dashboard_completed">completed</string>
+    <string name="dashboard_failed">failed</string>
+    <string name="dashboard_failed_default_error">download failed</string>
+    <string name="dashboard_retry_content_desc">retry</string>
+    <string name="dashboard_dismiss_content_desc">dismiss</string>
     <string name="dashboard_done">done</string>
     <string name="dashboard_speed">speed</string>
     <string name="dashboard_empty_title">no downloads yet</string>
