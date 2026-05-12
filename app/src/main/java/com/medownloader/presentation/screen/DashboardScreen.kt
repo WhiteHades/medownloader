@@ -51,6 +51,8 @@ fun DashboardScreen(
     onPauseClick: (String) -> Unit,
     onResumeClick: (String) -> Unit,
     onRemoveClick: (String) -> Unit,
+    onRetryClick: (String) -> Unit = {},
+    onDismissErrorClick: (String) -> Unit = {},
     onSettingsClick: () -> Unit,
     onStatsClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -129,6 +131,32 @@ fun DashboardScreen(
                     }
                 }
                 
+                if (uiState.erroredDownloads.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        SectionHeader(
+                            title = stringResource(R.string.dashboard_failed),
+                            count = uiState.erroredDownloads.size,
+                            icon = Icons.Outlined.ErrorOutline
+                        )
+                    }
+                    itemsIndexed(
+                        uiState.erroredDownloads,
+                        key = { _, d -> d.gid }
+                    ) { index, download ->
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn(tween(150, delayMillis = index * 30))
+                        ) {
+                            ErrorDownloadCard(
+                                download = download,
+                                onRetryClick = { onRetryClick(download.gid) },
+                                onDismissClick = { onDismissErrorClick(download.gid) }
+                            )
+                        }
+                    }
+                }
+
                 if (uiState.completedDownloads.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -767,5 +795,83 @@ private fun getStatusText(download: DownloadProgress): String {
         DownloadStatus.COMPLETE -> stringResource(R.string.status_completed)
         DownloadStatus.ERROR -> download.errorMessage ?: stringResource(R.string.status_error)
         DownloadStatus.STOPPED -> stringResource(R.string.status_removed)
+    }
+}
+
+@Composable
+private fun ErrorDownloadCard(
+    download: DownloadProgress,
+    onRetryClick: () -> Unit,
+    onDismissClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ExpressiveShapeTokens.CardSoft,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = ExpressiveShapes.medium
+            ) {
+                Icon(
+                    Icons.Filled.ErrorOutline,
+                    contentDescription = null,
+                    modifier = Modifier.padding(10.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = download.filename,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = download.errorMessage
+                        ?: stringResource(R.string.dashboard_failed_default_error),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            FilledTonalIconButton(
+                onClick = onRetryClick,
+                modifier = Modifier.size(36.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Icon(
+                    Icons.Filled.Refresh,
+                    contentDescription = stringResource(R.string.dashboard_retry_content_desc),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            FilledTonalIconButton(
+                onClick = onDismissClick,
+                modifier = Modifier.size(36.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+            ) {
+                Icon(
+                    Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.dashboard_dismiss_content_desc),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
     }
 }
