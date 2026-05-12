@@ -19,6 +19,7 @@ import com.medownloader.data.repository.SettingsRepository
 import com.medownloader.di.ServiceLocator
 import com.medownloader.presentation.screen.PaywallTriggerReason
 import com.medownloader.ui.theme.AppTheme
+import com.medownloader.util.formatSize
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -120,6 +121,24 @@ class MainViewModel(
             requestPaywall(PaywallTriggerReason.TORRENT_BLOCKED)
             return
         }
+
+        // preflight disk space check. if FileInfo.size is known we can block before
+        // aria2 tries to fallocate and errors the download out on the emulator.
+        val expectedBytes = _uiState.value.fileInfo?.size
+        when (val check = downloadRepository.checkDiskSpaceFor(expectedBytes)) {
+            is com.medownloader.util.DiskSpaceCheck.Insufficient -> {
+                viewModelScope.launch {
+                    _events.emit(
+                        UiEvent.ShowError(
+                            "not enough free space: need ${formatSize(check.requiredBytes)}, " +
+                                "have ${formatSize(check.freeBytes)}"
+                        )
+                    )
+                }
+                return
+            }
+            else -> { /* Sufficient or Unknown -> proceed */ }
+        }
         
         // check concurrent downloads
         val activeCount = _uiState.value.activeDownloads.size
@@ -211,6 +230,32 @@ class MainViewModel(
     fun removeDownload(gid: String) {
         viewModelScope.launch {
             downloadRepository.removeDownload(gid)
+        }
+    }
+
+    /**
+     * User action for the error card on the dashboard.
+     * Clears the failed entry from the registry so the card disappears.
+     * The caller can re-add the same URL if they want to retry.
+     */
+    fun dismissError(gid: String) {
+        viewModelScope.launch {
+            downloadRepository.removeDownload(gid)
+        }
+    }
+
+    /**
+     * Retry a failed download: drop the old ERROR entry and re-submit the URL.
+     * The gid used internally is the URL itself, so we reuse it as the retry target.
+     */
+    fun retryDownload(gid: String) {
+        viewModelScope.launch {
+            downloadRepository.removeDownload(gid)
+            // gid == url (see DownloadRepositoryImpl.addDownload)
+            downloadRepository.addDownload(gid, filename = null)
+                .onFailure { error ->
+                    _events.emit(UiEvent.ShowError(error.message ?: "retry failed"))
+                }
         }
     }
     
@@ -412,7 +457,8 @@ class MainViewModel(
                         state.copy(
                             downloads = downloads,
                             activeDownloads = downloads.filter { it.status == DownloadStatus.ACTIVE },
-                            completedDownloads = downloads.filter { it.status == DownloadStatus.COMPLETE }
+                            completedDownloads = downloads.filter { it.status == DownloadStatus.COMPLETE },
+                            erroredDownloads = downloads.filter { it.status == DownloadStatus.ERROR }
                         )
                     }
                 }
@@ -454,6 +500,7 @@ data class MainUiState(
     val downloads: List<DownloadProgress> = emptyList(),
     val activeDownloads: List<DownloadProgress> = emptyList(),
     val completedDownloads: List<DownloadProgress> = emptyList(),
+    val erroredDownloads: List<DownloadProgress> = emptyList(),
     val history: List<DownloadHistoryEntry> = emptyList(),
     val globalStats: Aria2GlobalStat? = null,
     val isAddingDownload: Boolean = false,
