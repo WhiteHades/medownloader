@@ -20,6 +20,22 @@ env:
   CHAQUOPY_VENDOR_DIR: ${{ github.workspace }}/.ci/chaquopy-maven
 
 jobs:
+  core-tests:
+    name: core unit tests (no chaquopy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - name: Run :core unit tests
+        run: ./gradlew :core:test --configure-on-demand --stacktrace
+
   build-and-test:
     name: build + unit tests
     runs-on: ubuntu-latest
@@ -31,11 +47,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
@@ -102,20 +118,16 @@ jobs:
           retention-days: 14
 
   lint:
-    name: android lint (non-blocking)
+    name: android lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # This project has pre-existing lint errors that are tracked separately
-    # (see README.md). We still want a report on every push, but we do not want
-    # lint failures to block PRs until the baseline is cleared.
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -146,7 +158,7 @@ jobs:
       - name: Run lint
         env:
           CHAQUOPY_MAVEN: ${{ env.CHAQUOPY_VENDOR_DIR }}
-        run: ./gradlew :app:lintDebug --stacktrace || true
+        run: ./gradlew :app:lintDebug --stacktrace
 
       - name: Upload lint HTML report
         if: always()
