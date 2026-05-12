@@ -14,6 +14,14 @@ cd "$ROOT_DIR"
 JAVA_HOME_DEFAULT="/home/efaz/.local/share/mise/installs/java/17.0.2"
 export JAVA_HOME="${JAVA_HOME:-$JAVA_HOME_DEFAULT}"
 
+# Chaquopy 17.0.1 is a locally-built fork (not on the public chaquo maven).
+# If the user has it checked out at the conventional path and hasn't set
+# CHAQUOPY_MAVEN themselves, point Gradle at it automatically.
+CHAQUOPY_MAVEN_DEFAULT="/home/efaz/Codes/chaquopy/maven"
+if [ -z "${CHAQUOPY_MAVEN:-}" ] && [ -d "$CHAQUOPY_MAVEN_DEFAULT" ]; then
+  export CHAQUOPY_MAVEN="$CHAQUOPY_MAVEN_DEFAULT"
+fi
+
 echo "[pre-push] compileDebugKotlin"
 ./gradlew :app:compileDebugKotlin --console=plain --quiet
 
