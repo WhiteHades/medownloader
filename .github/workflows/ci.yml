@@ -11,11 +11,19 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Chaquopy 17.0.1 is a locally-built fork (not on the public chaquo maven).
+  # We vendor the maven tree as a GitHub release asset on this repo and pull it
+  # here so CI runners can resolve the plugin without a private mirror.
+  CHAQUOPY_VENDOR_TAG: chaquopy-vendor-17.0.1
+  CHAQUOPY_VENDOR_ASSET: chaquopy-maven-17.0.1.tar.gz
+  CHAQUOPY_VENDOR_DIR: ${{ github.workspace }}/.ci/chaquopy-maven
+
 jobs:
   build-and-test:
     name: build + unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -34,13 +42,38 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
+      - name: Cache vendored chaquopy maven
+        id: chaquopy-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CHAQUOPY_VENDOR_DIR }}
+          key: chaquopy-vendor-${{ env.CHAQUOPY_VENDOR_TAG }}-v1
+
+      - name: Download vendored chaquopy maven
+        if: steps.chaquopy-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$CHAQUOPY_VENDOR_DIR"
+          gh release download "$CHAQUOPY_VENDOR_TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "$CHAQUOPY_VENDOR_ASSET" \
+            --dir .ci
+          tar -xzf ".ci/$CHAQUOPY_VENDOR_ASSET" --strip-components=1 -C "$CHAQUOPY_VENDOR_DIR"
+          echo "contents:"
+          ls "$CHAQUOPY_VENDOR_DIR" | head -5
+
       - name: Grant execute bit on gradlew
         run: chmod +x gradlew
 
       - name: Compile debug Kotlin
+        env:
+          CHAQUOPY_MAVEN: ${{ env.CHAQUOPY_VENDOR_DIR }}
         run: ./gradlew :app:compileDebugKotlin --stacktrace
 
       - name: Run debug unit tests
+        env:
+          CHAQUOPY_MAVEN: ${{ env.CHAQUOPY_VENDOR_DIR }}
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
       - name: Upload unit-test HTML report on failure
@@ -51,6 +84,8 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest
 
       - name: Assemble debug APK
+        env:
+          CHAQUOPY_MAVEN: ${{ env.CHAQUOPY_VENDOR_DIR }}
         run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: Upload debug APK
@@ -64,7 +99,7 @@ jobs:
   lint:
     name: android lint (non-blocking)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     # This project has pre-existing lint errors that are tracked separately
     # (see README.md). We still want a report on every push, but we do not want
     # lint failures to block PRs until the baseline is cleared.
@@ -78,10 +113,31 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Cache vendored chaquopy maven
+        id: chaquopy-cache-lint
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CHAQUOPY_VENDOR_DIR }}
+          key: chaquopy-vendor-${{ env.CHAQUOPY_VENDOR_TAG }}-v1
+
+      - name: Download vendored chaquopy maven
+        if: steps.chaquopy-cache-lint.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$CHAQUOPY_VENDOR_DIR"
+          gh release download "$CHAQUOPY_VENDOR_TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "$CHAQUOPY_VENDOR_ASSET" \
+            --dir .ci
+          tar -xzf ".ci/$CHAQUOPY_VENDOR_ASSET" --strip-components=1 -C "$CHAQUOPY_VENDOR_DIR"
+
       - name: Grant execute bit on gradlew
         run: chmod +x gradlew
 
       - name: Run lint
+        env:
+          CHAQUOPY_MAVEN: ${{ env.CHAQUOPY_VENDOR_DIR }}
         run: ./gradlew :app:lintDebug --stacktrace || true
 
       - name: Upload lint HTML report
