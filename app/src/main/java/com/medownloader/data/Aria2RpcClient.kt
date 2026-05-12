@@ -603,7 +603,14 @@ class Aria2RpcClient(
                 }
             }
 
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: WsResponse?) {}
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: WsResponse?) {
+                // Close the channel with the error so retryWhen in Aria2Engine can reconnect
+                close(t)
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(1000, null)
+            }
         })
 
         awaitClose {
