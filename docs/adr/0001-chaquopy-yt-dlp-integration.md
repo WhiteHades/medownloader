@@ -1,4 +1,4 @@
-# ADR-0001: Chaquopy 17.0.1 for yt-dlp Android Integration
+# ADR-0001: Chaquopy 17.0.0 for yt-dlp Android Integration
 
 **Date:** 2026-05-11
 **Status:** Accepted
@@ -12,7 +12,8 @@ meDownloader needs to integrate yt-dlp (Python) as a download backend inside the
 
 ## Decision
 
-Use Chaquopy 17.0.1 (option 2). Published on Maven Central (`com.chaquo.python:com.chaquo.python.gradle.plugin:17.0.1`).
+Use Chaquopy 17.0.0 (option 2). Published on the Chaquopy Maven repository
+(`com.chaquo.python:com.chaquo.python.gradle.plugin:17.0.0`).
 
 ## Rationale
 
@@ -24,7 +25,7 @@ Use Chaquopy 17.0.1 (option 2). Published on Maven Central (`com.chaquo.python:c
 ## Consequences
 
 - **minSdk bumped to 24** (Chaquopy minimum)
-- Build dependency on Chaquopy plugin (Maven Central, no custom repos)
+- Build dependency on the public Chaquopy Maven repository
 - Python GIL means yt-dlp calls are blocking — must run on `Dispatchers.IO`
 - yt-dlp progress hooks bridge via `Consumer<Map<String, Any?>>` → Chaquopy auto-converts to Python callable
 - `MeDownloaderApp` starts Python via `Python.start(AndroidPlatform(context))` in `onCreate()`

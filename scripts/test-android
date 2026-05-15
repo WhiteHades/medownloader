@@ -27,7 +27,7 @@ EMU="$SDK_DIR/emulator/emulator"
 AVD_NAME="${MD_AVD_NAME:-Medium_Phone}"
 AVD_HOME="${ANDROID_AVD_HOME:-/home/efaz/.config/.android/avd}"
 SDK_HOME="${ANDROID_SDK_HOME:-/home/efaz/.config/.android}"
-JAVA_HOME_DEFAULT="/home/efaz/.local/share/mise/installs/java/17.0.2"
+JAVA_HOME_DEFAULT="/usr/lib/jvm/java-21-openjdk"
 JAVA_HOME="${JAVA_HOME:-$JAVA_HOME_DEFAULT}"
 APP_ID="com.medownloader"
 

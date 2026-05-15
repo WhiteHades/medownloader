@@ -1,6 +1,6 @@
 # meDownloader
 
-meDownloader is an Android download manager built with Jetpack Compose and powered by aria2c.
+meDownloader is an Android download manager built with Jetpack Compose and powered by yt-dlp plus aria2c.
 
 ## Features
 
@@ -13,13 +13,15 @@ meDownloader is an Android download manager built with Jetpack Compose and power
 
 ## Tech Stack
 
-- Android SDK: compile 35, min 29.
+- Android SDK: compile 35, min 24.
 - Kotlin + Jetpack Compose (Material 3).
 - OkHttp + kotlinx-serialization for RPC networking.
 - DataStore for settings persistence.
 - Prebuilt aria2c binaries in `app/src/main/jniLibs`.
 
 ## Build and Run
+
+Use JDK 21 for all Gradle tasks. If you use `mise`, the included `mise.toml` pins the right version automatically after `mise install`.
 
 ```bash
 ./gradlew :app:assembleDebug

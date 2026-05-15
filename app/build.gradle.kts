@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.chaquo.python") version "17.0.1"
+    id("com.chaquo.python") version "17.0.0"
 }
 
 android {

@@ -18,9 +18,8 @@ if [ ! -d "$JAVA_HOME" ]; then
   export JAVA_HOME="/usr/lib/jvm/java-21-openjdk"
 fi
 
-# Chaquopy 17.0.1 is a locally-built fork (not on the public chaquo maven).
-# If the user has it checked out at the conventional path and hasn't set
-# CHAQUOPY_MAVEN themselves, point Gradle at it automatically.
+# Allow a local Chaquopy Maven override when testing patched builds.
+# The default build resolves the public 17.0.0 release from chaquo.com/maven.
 CHAQUOPY_MAVEN_DEFAULT="/home/efaz/Codes/chaquopy/maven"
 if [ -z "${CHAQUOPY_MAVEN:-}" ] && [ -d "$CHAQUOPY_MAVEN_DEFAULT" ]; then
   export CHAQUOPY_MAVEN="$CHAQUOPY_MAVEN_DEFAULT"
