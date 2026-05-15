@@ -61,6 +61,7 @@ class MainActivity : ComponentActivity() {
                 val connectionLimit by viewModel.connectionLimit.collectAsStateWithLifecycle()
                 val splitCount by viewModel.splitCount.collectAsStateWithLifecycle()
                 val enableDht by viewModel.enableDht.collectAsStateWithLifecycle()
+                val dnsServers by viewModel.dnsServers.collectAsStateWithLifecycle()
                 val diskCacheMb by viewModel.diskCacheMb.collectAsStateWithLifecycle()
                 
                 val navController = rememberNavController()
@@ -162,6 +163,7 @@ class MainActivity : ComponentActivity() {
                                 connectionLimit = connectionLimit,
                                 splitCount = splitCount,
                                 enableDht = enableDht,
+                                dnsServers = dnsServers,
                                 diskCacheMb = diskCacheMb,
                                 downloadPath = downloadDir ?: stringResource(R.string.settings_download_path_default),
                                 onThemeSelected = viewModel::updateTheme,
@@ -170,6 +172,7 @@ class MainActivity : ComponentActivity() {
                                 onConnectionLimitChanged = viewModel::updateConnectionLimit,
                                 onSplitCountChanged = viewModel::updateSplitCount,
                                 onEnableDhtChanged = viewModel::updateEnableDht,
+                                onDnsServersChanged = viewModel::updateDnsServers,
                                 onDiskCacheMbChanged = viewModel::updateDiskCacheMb,
                                 onDownloadPathClick = { folderPickerLauncher.launch(null) },
                                 onBackClick = { navController.popBackStack() },

@@ -46,6 +46,15 @@
     <string name="settings_max_concurrent">max concurrent downloads</string>
     <string name="settings_download_location">download location</string>
     <string name="settings_advanced_downloads">advanced downloads</string>
+    <string name="settings_split_count">split count</string>
+    <string name="settings_split_count_subtitle_fmt">%1$d segments per download</string>
+    <string name="settings_split_count_dialog_subtitle">segments per download</string>
+    <string name="settings_dns_servers">dns servers</string>
+    <string name="settings_dns_servers_dialog_subtitle">comma-separated resolvers used by aria2c and yt-dlp downloads</string>
+    <string name="settings_dns_servers_placeholder">8.8.8.8,8.8.4.4,1.1.1.1</string>
+    <string name="settings_disk_cache">disk cache</string>
+    <string name="settings_disk_cache_value_fmt">%1$d MB</string>
+    <string name="settings_disk_cache_dialog_subtitle">MB of memory cache</string>
     <string name="settings_about">about</string>
     <string name="settings_version">version</string>
     <string name="settings_version_value">1.0.0</string>

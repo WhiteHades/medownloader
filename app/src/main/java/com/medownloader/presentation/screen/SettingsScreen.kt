@@ -41,6 +41,7 @@ fun SettingsScreen(
     connectionLimit: Int,
     splitCount: Int,
     enableDht: Boolean,
+    dnsServers: String,
     diskCacheMb: Int,
     downloadPath: String,
     onThemeSelected: (AppTheme) -> Unit,
@@ -49,6 +50,7 @@ fun SettingsScreen(
     onConnectionLimitChanged: (Int) -> Unit,
     onSplitCountChanged: (Int) -> Unit,
     onEnableDhtChanged: (Boolean) -> Unit,
+    onDnsServersChanged: (String) -> Unit,
     onDiskCacheMbChanged: (Int) -> Unit,
     onDownloadPathClick: () -> Unit,
     onBackClick: () -> Unit,
@@ -61,6 +63,7 @@ fun SettingsScreen(
     var showConnectionsDialog by remember { mutableStateOf(false) }
     var showConcurrentDialog by remember { mutableStateOf(false) }
     var showSplitCountDialog by remember { mutableStateOf(false) }
+    var showDnsServersDialog by remember { mutableStateOf(false) }
     var showDiskCacheDialog by remember { mutableStateOf(false) }
 
     val connectionCountText = stringResource(
@@ -225,8 +228,8 @@ fun SettingsScreen(
                 SettingsCard {
                     SettingsItem(
                         icon = Icons.Outlined.GridOn,
-                        title = "Split count",
-                        subtitle = "$splitCount segments per download",
+                        title = stringResource(R.string.settings_split_count),
+                        subtitle = stringResource(R.string.settings_split_count_subtitle_fmt, splitCount),
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             showSplitCountDialog = true
@@ -241,8 +244,24 @@ fun SettingsScreen(
 
                     SettingsItem(
                         icon = Icons.Outlined.Dns,
-                        title = "Disk cache",
-                        subtitle = "$diskCacheMb MB",
+                        title = stringResource(R.string.settings_dns_servers),
+                        subtitle = dnsServers,
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                            showDnsServersDialog = true
+                        },
+                        showChevron = true
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    SettingsItem(
+                        icon = Icons.Outlined.Memory,
+                        title = stringResource(R.string.settings_disk_cache),
+                        subtitle = stringResource(R.string.settings_disk_cache_value_fmt, diskCacheMb),
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                             showDiskCacheDialog = true
@@ -365,15 +384,36 @@ fun SettingsScreen(
             onDismiss = { showConnectionsDialog = false }
         )
     }
+
+    if (showConcurrentDialog) {
+        ConnectionsDialog(
+            title = stringResource(R.string.settings_max_concurrent),
+            subtitle = stringResource(R.string.settings_concurrent_subtitle),
+            currentValue = maxConcurrent,
+            isPremium = isPremium,
+            freeLimit = 4,
+            options = listOf(1, 2, 3, 4, 6, 8, 12),
+            onValueSelected = { value ->
+                onMaxConcurrentChanged(value)
+                showConcurrentDialog = false
+            },
+            onUpgradeClick = {
+                showConcurrentDialog = false
+                onGetProClick()
+            },
+            onDismiss = { showConcurrentDialog = false }
+        )
+    }
     
     // Split Count Dialog
     if (showSplitCountDialog) {
         ConnectionsDialog(
-            title = "Split count",
-            subtitle = "segments per download",
+            title = stringResource(R.string.settings_split_count),
+            subtitle = stringResource(R.string.settings_split_count_dialog_subtitle),
             currentValue = splitCount,
             isPremium = true,
             freeLimit = 32,
+            options = listOf(1, 2, 4, 8, 16, 32),
             onValueSelected = { value ->
                 onSplitCountChanged(value)
                 showSplitCountDialog = false
@@ -383,14 +423,29 @@ fun SettingsScreen(
         )
     }
 
+    if (showDnsServersDialog) {
+        TextValueDialog(
+            title = stringResource(R.string.settings_dns_servers),
+            subtitle = stringResource(R.string.settings_dns_servers_dialog_subtitle),
+            initialValue = dnsServers,
+            placeholder = stringResource(R.string.settings_dns_servers_placeholder),
+            onValueSelected = { value ->
+                onDnsServersChanged(value)
+                showDnsServersDialog = false
+            },
+            onDismiss = { showDnsServersDialog = false }
+        )
+    }
+
     // Disk Cache Dialog
     if (showDiskCacheDialog) {
         ConnectionsDialog(
-            title = "Disk cache",
-            subtitle = "MB of memory cache",
+            title = stringResource(R.string.settings_disk_cache),
+            subtitle = stringResource(R.string.settings_disk_cache_dialog_subtitle),
             currentValue = diskCacheMb,
             isPremium = true,
             freeLimit = 128,
+            options = listOf(4, 8, 16, 32, 64, 128),
             onValueSelected = { value ->
                 onDiskCacheMbChanged(value)
                 showDiskCacheDialog = false
@@ -399,6 +454,57 @@ fun SettingsScreen(
             onDismiss = { showDiskCacheDialog = false }
         )
     }
+}
+
+@Composable
+private fun TextValueDialog(
+    title: String,
+    subtitle: String,
+    initialValue: String,
+    placeholder: String,
+    onValueSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var value by remember(initialValue) { mutableStateOf(initialValue) }
+    val doneLabel = stringResource(R.string.common_done)
+    val cancelLabel = stringResource(android.R.string.cancel)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text(placeholder) },
+                    minLines = 2
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onValueSelected(value.trim()) }) {
+                Text(doneLabel)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(cancelLabel)
+            }
+        },
+        shape = ExpressiveShapeTokens.Dialog
+    )
 }
 
 @Composable
@@ -780,11 +886,11 @@ private fun ConnectionsDialog(
     currentValue: Int,
     isPremium: Boolean = true,
     freeLimit: Int = 7,
+    options: List<Int> = listOf(1, 2, 4, 8, 16),
     onValueSelected: (Int) -> Unit,
     onUpgradeClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    val options = listOf(1, 2, 4, 8, 16)
     val doneLabel = stringResource(R.string.common_done)
     
     AlertDialog(
