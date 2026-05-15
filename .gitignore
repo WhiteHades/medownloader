@@ -56,3 +56,4 @@ secrets.properties
 # Generated store assets (can regenerate)
 # =============================================================================
 # /store_assets/
+core/build/
