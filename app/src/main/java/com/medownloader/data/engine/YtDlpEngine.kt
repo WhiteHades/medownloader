@@ -4,19 +4,23 @@ import android.util.Log
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.medownloader.data.repository.FileInfo
+import com.medownloader.data.repository.SettingsRepository
 import com.medownloader.data.source.Aria2ProcessManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.util.function.Consumer
 
 class YtDlpEngine(
-    private val aria2ProcessManager: Aria2ProcessManager
+    private val aria2ProcessManager: Aria2ProcessManager,
+    private val settingsRepository: SettingsRepository? = null
 ) : DownloadEngine {
 
     companion object {
         private const val TAG = "YtDlpEngine"
+        private const val DEFAULT_DNS_SERVERS = "8.8.8.8,8.8.4.4,1.1.1.1"
     }
 
     /**
@@ -39,6 +43,8 @@ class YtDlpEngine(
                 try {
                     val py = Python.getInstance()
                     val ytdlp = py.getModule("yt_dlp")
+                    var lastProgress: DownloadProgress? = null
+                    var emittedTerminal = false
 
                     val progressHook = Consumer<Map<String, Any?>> { raw ->
                         val status = raw["status"] as? String ?: return@Consumer
@@ -59,17 +65,20 @@ class YtDlpEngine(
                             else -> DownloadStatus.QUEUED
                         }
 
-                        trySend(
-                            DownloadProgress(
-                                gid = options.url,
-                                status = mappedStatus,
-                                filename = filename,
-                                downloadedBytes = downloaded,
-                                totalBytes = total,
-                                speed = speed,
-                                eta = eta
-                            )
+                        val progress = DownloadProgress(
+                            gid = options.url,
+                            status = mappedStatus,
+                            filename = filename,
+                            downloadedBytes = downloaded,
+                            totalBytes = total,
+                            speed = speed,
+                            eta = eta
                         )
+                        lastProgress = progress
+                        if (mappedStatus == DownloadStatus.COMPLETE || mappedStatus == DownloadStatus.ERROR) {
+                            emittedTerminal = true
+                        }
+                        trySend(progress)
                     }
 
                     val params = buildYtdlpParams(options).toMutableMap()
@@ -80,17 +89,9 @@ class YtDlpEngine(
 
                     // yt-dlp does not always fire a "finished" progress event; emit our own
                     // terminal COMPLETE so the repository records the download as finished.
-                    send(
-                        DownloadProgress(
-                            gid = options.url,
-                            status = DownloadStatus.COMPLETE,
-                            filename = options.filename ?: options.url,
-                            downloadedBytes = 0,
-                            totalBytes = 0,
-                            speed = 0,
-                            eta = 0
-                        )
-                    )
+                    if (!emittedTerminal) {
+                        send(buildTerminalProgress(options, lastProgress))
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "yt-dlp download failed", e)
                     send(
@@ -168,13 +169,19 @@ class YtDlpEngine(
         }
     }
 
-    private fun buildYtdlpParams(options: DownloadOptions): Map<String, Any> {
+    private suspend fun buildYtdlpParams(options: DownloadOptions): Map<String, Any> {
+        val runtime = loadRuntimeSettings()
         val outTemplate = options.filename ?: "%(title).200s.%(ext)s"
         val aria2Args = listOf(
             "--rpc-secret=${aria2ProcessManager.getRpcSecret()}",
             "--summary-interval=0",
             "--enable-color=false",
-            "-x", "8", "-s", "8", "-j", "8",
+            "--max-connection-per-server=${runtime.connectionLimit}",
+            "--split=${runtime.splitCount}",
+            "--min-split-size=5M",
+            "--disk-cache=${runtime.diskCacheMb}M",
+            "--async-dns=true",
+            "--async-dns-server=${runtime.dnsServers}",
             "--file-allocation=none",
             "--http-accept-gzip=true"
         )
@@ -185,13 +192,80 @@ class YtDlpEngine(
             "outtmpl" to outTemplate,
             "external_downloader" to "aria2c",
             "external_downloader_args" to mapOf("aria2c" to aria2Args),
-            "concurrent_fragment_downloads" to 8,
+            "concurrent_fragment_downloads" to runtime.splitCount,
             "fragment_retries" to 10,
             "retries" to 10,
             "continuedl" to true,
             "overwrites" to true
         )
     }
+
+    private suspend fun loadRuntimeSettings(): YtDlpRuntimeSettings {
+        val connectionLimit = settingsRepository
+            ?.connectionLimit
+            ?.first()
+            ?.coerceIn(1, 16)
+            ?: 8
+        val splitCount = settingsRepository
+            ?.splitCount
+            ?.first()
+            ?.coerceIn(1, 16)
+            ?: connectionLimit
+        val diskCacheMb = settingsRepository
+            ?.diskCacheMb
+            ?.first()
+            ?.coerceIn(4, 128)
+            ?: 32
+        val dnsServers = settingsRepository
+            ?.dnsServers
+            ?.first()
+            ?.ifBlank { DEFAULT_DNS_SERVERS }
+            ?: DEFAULT_DNS_SERVERS
+
+        return YtDlpRuntimeSettings(
+            connectionLimit = connectionLimit,
+            splitCount = splitCount,
+            diskCacheMb = diskCacheMb,
+            dnsServers = dnsServers
+        )
+    }
+
+    private fun buildTerminalProgress(
+        options: DownloadOptions,
+        lastProgress: DownloadProgress?
+    ): DownloadProgress {
+        val baseline = lastProgress ?: DownloadProgress(
+            gid = options.url,
+            status = DownloadStatus.ACTIVE,
+            filename = options.filename ?: options.url,
+            downloadedBytes = 0,
+            totalBytes = 0,
+            speed = 0,
+            eta = 0
+        )
+        val completedBytes = when {
+            baseline.totalBytes > 0L -> baseline.totalBytes
+            baseline.downloadedBytes > 0L -> baseline.downloadedBytes
+            else -> 0L
+        }
+
+        return baseline.copy(
+            status = DownloadStatus.COMPLETE,
+            downloadedBytes = completedBytes,
+            totalBytes = maxOf(baseline.totalBytes, completedBytes),
+            speed = 0,
+            eta = 0,
+            errorMessage = null
+        )
+    }
+
+    private data class YtDlpRuntimeSettings(
+        val connectionLimit: Int,
+        val splitCount: Int,
+        val diskCacheMb: Int,
+        val dnsServers: String
+    )
+
 }
 
 private fun Any.toPython(py: Python): Any {
