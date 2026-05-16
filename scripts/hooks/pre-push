@@ -11,12 +11,8 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel)"
 cd "$ROOT_DIR"
 
-JAVA_HOME_DEFAULT="/home/efaz/.local/share/mise/installs/java/21"
+JAVA_HOME_DEFAULT="/usr/lib/jvm/java-21-openjdk"
 export JAVA_HOME="${JAVA_HOME:-$JAVA_HOME_DEFAULT}"
-# Fall back to system Java 21 if the mise path doesn't exist
-if [ ! -d "$JAVA_HOME" ]; then
-  export JAVA_HOME="/usr/lib/jvm/java-21-openjdk"
-fi
 
 # Allow a local Chaquopy Maven override when testing patched builds.
 # The default build resolves the public 17.0.0 release from chaquo.com/maven.
