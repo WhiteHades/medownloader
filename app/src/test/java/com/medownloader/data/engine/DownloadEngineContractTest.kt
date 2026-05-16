@@ -61,7 +61,7 @@ class DownloadEngineContractTest {
 
     @Test
     fun `successful engine emits ACTIVE then COMPLETE`() = runBlocking {
-        val events = SuccessEngine().download(DownloadOptions("https://example.com/file.mp4")).toList()
+        val events = SuccessEngine().download(DownloadOptions("https://example.com/file.mp4", protocolType = EngineType.ARIA2C)).toList()
         assertEquals(2, events.size)
         assertEquals(DownloadStatus.ACTIVE, events[0].status)
         assertEquals(DownloadStatus.COMPLETE, events[1].status)
@@ -69,13 +69,13 @@ class DownloadEngineContractTest {
 
     @Test
     fun `successful engine final event has isComplete true`() = runBlocking {
-        val last = SuccessEngine().download(DownloadOptions("https://example.com/file.mp4")).toList().last()
+        val last = SuccessEngine().download(DownloadOptions("https://example.com/file.mp4", protocolType = EngineType.ARIA2C)).toList().last()
         assertTrue(last.isComplete)
     }
 
     @Test
     fun `error engine emits single ERROR event with message`() = runBlocking {
-        val events = ErrorEngine("network error").download(DownloadOptions("https://example.com/file.mp4")).toList()
+        val events = ErrorEngine("network error").download(DownloadOptions("https://example.com/file.mp4", protocolType = EngineType.ARIA2C)).toList()
         assertEquals(1, events.size)
         assertEquals(DownloadStatus.ERROR, events[0].status)
         assertEquals("network error", events[0].errorMessage)
@@ -84,7 +84,7 @@ class DownloadEngineContractTest {
     @Test
     fun `progress percent stays within 0-100`() = runBlocking {
         SuccessEngine(totalBytes = 1000L)
-            .download(DownloadOptions("https://example.com/file.mp4"))
+            .download(DownloadOptions("https://example.com/file.mp4", protocolType = EngineType.ARIA2C))
             .toList()
             .forEach { p -> assertTrue(p.progressPercent in 0..100) }
     }
@@ -92,7 +92,7 @@ class DownloadEngineContractTest {
     @Test
     fun `gid is stable across all events from same download`() = runBlocking {
         val gids = SuccessEngine(gid = "stable-gid")
-            .download(DownloadOptions("https://example.com/file.mp4"))
+            .download(DownloadOptions("https://example.com/file.mp4", protocolType = EngineType.ARIA2C))
             .toList()
             .map { it.gid }
             .toSet()
@@ -150,7 +150,7 @@ class DownloadEngineContractTest {
         val results = downloadWithFallback(
             primary = ErrorEngine("yt-dlp failed"),
             fallback = SuccessEngine(gid = "fallback-gid"),
-            options = DownloadOptions("https://youtube.com/watch?v=abc")
+            options = DownloadOptions("https://youtube.com/watch?v=abc", protocolType = EngineType.ARIA2C)
         )
         assertTrue(results.isNotEmpty())
         assertTrue(results.last().isComplete)
@@ -162,7 +162,7 @@ class DownloadEngineContractTest {
         val results = downloadWithFallback(
             primary = SuccessEngine(gid = "primary-gid"),
             fallback = ErrorEngine("should not be called"),
-            options = DownloadOptions("https://youtube.com/watch?v=abc")
+            options = DownloadOptions("https://youtube.com/watch?v=abc", protocolType = EngineType.ARIA2C)
         )
         assertTrue(results.last().isComplete)
         assertTrue(results.all { it.gid == "primary-gid" })
@@ -173,7 +173,7 @@ class DownloadEngineContractTest {
         val results = downloadWithFallback(
             primary = ErrorEngine("primary failed"),
             fallback = ErrorEngine("fallback also failed"),
-            options = DownloadOptions("https://youtube.com/watch?v=abc")
+            options = DownloadOptions("https://youtube.com/watch?v=abc", protocolType = EngineType.ARIA2C)
         )
         assertTrue(results.isNotEmpty())
         assertEquals(DownloadStatus.ERROR, results.last().status)

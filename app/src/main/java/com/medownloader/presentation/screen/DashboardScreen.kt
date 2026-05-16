@@ -492,20 +492,22 @@ private fun ExpressiveDownloadCard(
                 
                 // Action buttons
                 if (isActive) {
-                    ActionButton(
-                        icon = if (download.isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                        contentDescription = if (download.isPaused) {
-                            stringResource(R.string.action_resume)
-                        } else {
-                            stringResource(R.string.action_pause)
-                        },
-                        onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                            if (download.isPaused) onResumeClick() else onPauseClick()
-                        },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    if (download.isPausable) {
+                        ActionButton(
+                            icon = if (download.isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (download.isPaused) {
+                                stringResource(R.string.action_resume)
+                            } else {
+                                stringResource(R.string.action_pause)
+                            },
+                            onClick = {
+                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                if (download.isPaused) onResumeClick() else onPauseClick()
+                            },
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
             

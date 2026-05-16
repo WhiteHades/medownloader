@@ -155,7 +155,8 @@ class DownloadRepositoryImpl(
                 downloadedBytes = 0,
                 totalBytes = 0,
                 speed = 0,
-                eta = 0
+                eta = 0,
+                engineType = route
             )
             publishState()
         }
@@ -192,6 +193,7 @@ class DownloadRepositoryImpl(
         }
 
         var switchedToFallback = false
+        var currentEngineType = route
 
         try {
             flow.collect { progress ->
@@ -201,16 +203,17 @@ class DownloadRepositoryImpl(
                 if (!switchedToFallback && progress.status == DownloadStatus.ERROR && route == EngineType.YT_DLP) {
                     Log.w(TAG, "yt-dlp error event, falling back to aria2c: $gid")
                     switchedToFallback = true
+                    currentEngineType = EngineType.ARIA2C
                     activeDownloads[gid]?.let { activeDownloads[gid] = it.copy(owner = EngineOwner.ARIA2C) }
                     fallbackEngine.download(options).collect { fp ->
-                        downloadRegistry[fp.gid] = fp
+                        downloadRegistry[fp.gid] = fp.copy(engineType = EngineType.ARIA2C)
                         publishState()
                         recordHistoryIfTerminal(fp, options.url)
                     }
                     return@collect
                 }
 
-                downloadRegistry[progress.gid] = progress
+                downloadRegistry[progress.gid] = progress.copy(engineType = currentEngineType)
                 publishState()
                 recordHistoryIfTerminal(progress, options.url)
             }
@@ -223,7 +226,7 @@ class DownloadRepositoryImpl(
                 activeDownloads[gid]?.let { activeDownloads[gid] = it.copy(owner = EngineOwner.ARIA2C) }
                 try {
                     fallbackEngine.download(options).collect { fp ->
-                        downloadRegistry[fp.gid] = fp
+                        downloadRegistry[fp.gid] = fp.copy(engineType = EngineType.ARIA2C)
                         publishState()
                         recordHistoryIfTerminal(fp, options.url)
                     }
@@ -247,7 +250,8 @@ class DownloadRepositoryImpl(
             totalBytes = 0,
             speed = 0,
             eta = 0,
-            errorMessage = e.message
+            errorMessage = e.message,
+            engineType = options.protocolType
         )
         downloadRegistry[gid] = errProgress
         publishState()

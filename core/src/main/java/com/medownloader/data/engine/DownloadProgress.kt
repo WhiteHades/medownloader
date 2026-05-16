@@ -8,7 +8,8 @@ data class DownloadProgress(
     val totalBytes: Long,
     val speed: Long,
     val eta: Long,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val engineType: EngineType? = null
 ) {
     val downloadSpeed: Long get() = speed
     val completedLength: Long get() = downloadedBytes
@@ -34,4 +35,8 @@ data class DownloadProgress(
 
     val etaSeconds: Long
         get() = if (speed > 0) remainingBytes / speed else 0
+
+    /** Pause/resume is only supported for aria2c-routed downloads. */
+    val isPausable: Boolean
+        get() = engineType == EngineType.ARIA2C
 }
