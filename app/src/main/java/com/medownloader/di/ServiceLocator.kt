@@ -4,6 +4,7 @@ import android.content.Context
 import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.engine.Aria2Engine
 import com.medownloader.data.engine.YtDlpEngine
+import com.medownloader.data.repository.DownloadQueueRepository
 import com.medownloader.data.repository.DownloadRepository
 import com.medownloader.data.repository.DownloadHistoryRepository
 import com.medownloader.data.repository.DownloadRepositoryImpl
@@ -34,6 +35,9 @@ object ServiceLocator {
 
     @Volatile
     private var downloadHistoryRepository: DownloadHistoryRepository? = null
+
+    @Volatile
+    private var downloadQueueRepository: DownloadQueueRepository? = null
 
     @Volatile
     private var premiumRepository: PremiumRepository? = null
@@ -88,6 +92,7 @@ object ServiceLocator {
                 primaryEngine = provideYtDlpEngine(),
                 fallbackEngine = provideAria2Engine(),
                 historyRepository = provideDownloadHistoryRepository(),
+                queueRepository = provideDownloadQueueRepository(),
                 rpcClient = provideRpcClient(),
                 processManager = provideProcessManager(),
                 context = requireNotNull(appContext),
@@ -101,6 +106,14 @@ object ServiceLocator {
             downloadHistoryRepository ?: DownloadHistoryRepository(
                 requireNotNull(appContext)
             ).also { downloadHistoryRepository = it }
+        }
+    }
+
+    fun provideDownloadQueueRepository(): DownloadQueueRepository {
+        return downloadQueueRepository ?: synchronized(this) {
+            downloadQueueRepository ?: DownloadQueueRepository(
+                requireNotNull(appContext)
+            ).also { downloadQueueRepository = it }
         }
     }
 
@@ -128,6 +141,7 @@ object ServiceLocator {
             ytDlpEngine = null
             downloadRepository = null
             downloadHistoryRepository = null
+            downloadQueueRepository = null
             premiumRepository = null
             settingsRepository = null
         }

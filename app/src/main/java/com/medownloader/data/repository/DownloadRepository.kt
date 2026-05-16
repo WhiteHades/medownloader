@@ -50,6 +50,7 @@ class DownloadRepositoryImpl(
     private val primaryEngine: YtDlpEngine,
     private val fallbackEngine: Aria2Engine,
     private val historyRepository: DownloadHistoryRepository,
+    private val queueRepository: DownloadQueueRepository,
     // rpcClient kept only for getGlobalStats + applyRuntimeLimits — no download ops use it directly
     private val rpcClient: Aria2RpcClient,
     private val processManager: Aria2ProcessManager,
@@ -102,6 +103,8 @@ class DownloadRepositoryImpl(
                 }
             }
         }
+        // Restore persisted queue on startup
+        scope.launch { restoreQueue() }
     }
 
     override suspend fun ensureEngineRunning(): Result<Unit> {
@@ -159,6 +162,7 @@ class DownloadRepositoryImpl(
                 engineType = route
             )
             publishState()
+            persistQueue()
         }
 
         return Result.success(gid)
@@ -271,6 +275,23 @@ class DownloadRepositoryImpl(
                 } else null
             } ?: break
             launchDownload(next.gid, next.options, next.route)
+        }
+        persistQueue()
+    }
+
+    private suspend fun persistQueue() {
+        val snapshot = poolMutex.withLock {
+            pendingQueue.map { QueuedDownload(it.gid, it.options.filename, it.route.name) }
+        }
+        queueRepository.save(snapshot)
+    }
+
+    private suspend fun restoreQueue() {
+        val saved = queueRepository.snapshot()
+        if (saved.isEmpty()) return
+        queueRepository.clear()
+        for (item in saved) {
+            addDownload(item.url, item.filename)
         }
     }
 
