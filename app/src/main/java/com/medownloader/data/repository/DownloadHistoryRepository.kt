@@ -12,7 +12,7 @@ import kotlinx.serialization.json.Json
 
 private val Context.historyDataStore by preferencesDataStore(name = "download_history")
 
-class DownloadHistoryRepository(private val context: Context) {
+class DownloadHistoryRepository(private val context: Context) : DownloadHistorySink {
 
     companion object {
         private const val MAX_ENTRIES = 500
@@ -35,7 +35,7 @@ class DownloadHistoryRepository(private val context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    suspend fun append(entry: DownloadHistoryEntry) {
+    override suspend fun append(entry: DownloadHistoryEntry) {
         context.historyDataStore.edit { prefs ->
             val current = prefs[Keys.HISTORY]?.let { raw ->
                 runCatching {

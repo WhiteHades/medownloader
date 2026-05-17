@@ -60,6 +60,12 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    // Let android.util.Log return defaults instead of throwing in unit tests so
+    // production code that logs (e.g. DownloadRepositoryImpl) is testable.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 chaquopy {

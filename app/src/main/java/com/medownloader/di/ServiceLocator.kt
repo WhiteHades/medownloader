@@ -95,7 +95,6 @@ object ServiceLocator {
                 queueRepository = provideDownloadQueueRepository(),
                 rpcClient = provideRpcClient(),
                 processManager = provideProcessManager(),
-                context = requireNotNull(appContext),
                 settingsRepository = provideSettingsRepository()
             ).also { downloadRepository = it }
         }

@@ -26,7 +26,7 @@ private val Process.isRunning: Boolean
 class Aria2ProcessManager(
     private val context: Context,
     private val settingsRepository: SettingsRepository? = null
-) {
+) : com.medownloader.data.repository.EngineProcessController {
 
     companion object {
         private const val TAG = "Aria2ProcessManager"
@@ -53,7 +53,7 @@ class Aria2ProcessManager(
         data class Error(val message: String) : ProcessState()
     }
 
-    suspend fun start(): Result<Unit> = startMutex.withLock {
+    override suspend fun start(): Result<Unit> = startMutex.withLock {
         withContext(Dispatchers.IO) {
             if (isRpcResponding()) {
                 Log.d(TAG, "RPC is already responding, skipping start")
@@ -104,7 +104,9 @@ class Aria2ProcessManager(
                 "--rpc-listen-port=$RPC_PORT",
                 "--rpc-listen-all=false",
                 "--rpc-secret=$RPC_SECRET",
-                "--rpc-allow-origin-all=false",
+                // Allow any Origin so OkHttp's WebSocket (which sends Origin: http://localhost)
+                // can connect. Safe because the RPC is bound to 127.0.0.1 only.
+                "--rpc-allow-origin-all=true",
                 "--rpc-save-upload-metadata=true",
                 "--rpc-max-request-size=2M",
                 "--ca-certificate=$caCertPath",
@@ -134,7 +136,10 @@ class Aria2ProcessManager(
                 "--server-stat-of=${serverStatFile.absolutePath}",
                 "--server-stat-if=${serverStatFile.absolutePath}",
                 "--server-stat-timeout=86400",
-                "--file-allocation=falloc",
+                // file-allocation=falloc fails on Android emulator userdata (sdcardfs/fuse
+                // does not implement fallocate), aborting every download. "none" is the
+                // safe choice for app-internal downloads. See ADR-0004.
+                "--file-allocation=none",
                 "--disk-cache=${diskCacheMb}M",
                 "--auto-file-renaming=true",
                 "--allow-overwrite=false",
@@ -185,16 +190,30 @@ class Aria2ProcessManager(
                 }
             }
             
-            delay(500)
-            
-            if (process.isRunning) {
+            // Wait for the RPC endpoint to actually start serving requests. The process
+            // is "alive" within milliseconds of spawn, but binding the socket and
+            // accepting JSON-RPC takes longer (especially with --check-certificate and
+            // session file replay). A flat delay(500) was racing the first addUri call
+            // and producing "RPC unreachable" failures. Instead, poll for up to ~10s.
+            val ready = awaitRpcReady(process, timeoutMs = 10_000L)
+
+            if (ready) {
                 _processState.value = ProcessState.Running
                 restartCount = 0
                 startWatchdog()
                 Log.i(TAG, "aria2c started successfully on port $RPC_PORT")
                 Result.success(Unit)
+            } else if (process.isRunning) {
+                // Process is alive but never answered RPC. Kill it so the next
+                // start() attempt has a clean slate.
+                runCatching { process.destroy() }
+                aria2Process = null
+                val error = "aria2c started but RPC did not become ready within 10s"
+                _processState.value = ProcessState.Error(error)
+                Log.e(TAG, error)
+                Result.failure(RuntimeException(error))
             } else {
-                val exitCode = process.exitValue()
+                val exitCode = runCatching { process.exitValue() }.getOrNull()
                 val error = "aria2c failed to start (exit code: $exitCode)"
                 _processState.value = ProcessState.Error(error)
                 Log.e(TAG, error)
@@ -258,7 +277,53 @@ class Aria2ProcessManager(
         }
     }
 
-    suspend fun stop() = withContext(Dispatchers.IO) {
+    /**
+     * Polls the JSON-RPC endpoint until [aria2.getVersion] succeeds, or until [timeoutMs]
+     * elapses, or until the spawned [process] dies. Returns `true` when RPC is serving.
+     *
+     * This replaces the previous flat `delay(500)` after spawning aria2c, which was
+     * racing the first addUri call and producing intermittent "RPC unreachable" errors.
+     */
+    private suspend fun awaitRpcReady(process: Process, timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var attempt = 0
+        while (System.currentTimeMillis() < deadline) {
+            if (!process.isRunning) {
+                Log.w(TAG, "awaitRpcReady: process exited during readiness wait")
+                return false
+            }
+            if (probeRpcOnce()) {
+                Log.d(TAG, "awaitRpcReady: RPC ready after ${attempt + 1} probe(s)")
+                return true
+            }
+            attempt++
+            // Backoff: 100ms, 200ms, 300ms, ... capped at 500ms.
+            delay((100L * attempt).coerceAtMost(500L))
+        }
+        Log.w(TAG, "awaitRpcReady: timed out after ${timeoutMs}ms (${attempt} probes)")
+        return false
+    }
+
+    /** Single short-timeout RPC probe used by [awaitRpcReady]. */
+    private fun probeRpcOnce(): Boolean = try {
+        val url = URL("http://127.0.0.1:$RPC_PORT/jsonrpc")
+        val connection = url.openConnection() as HttpURLConnection
+        connection.connectTimeout = 500
+        connection.readTimeout = 500
+        connection.requestMethod = "POST"
+        connection.doOutput = true
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.outputStream.use { os ->
+            os.write("""{"jsonrpc":"2.0","id":"ready","method":"aria2.getVersion","params":["token:$RPC_SECRET"]}""".toByteArray())
+        }
+        val code = connection.responseCode
+        connection.disconnect()
+        code == 200
+    } catch (_: Exception) {
+        false
+    }
+
+    override suspend fun stop(): Unit = withContext(Dispatchers.IO) {
         watchdogJob?.cancel()
         watchdogJob = null
 
@@ -369,4 +434,12 @@ class Aria2ProcessManager(
     fun getRpcSecret(): String = RPC_SECRET
 
     fun getRpcUrl(): String = "http://localhost:$RPC_PORT/jsonrpc"
+
+    /**
+     * [com.medownloader.data.repository.EngineProcessController] adapter:
+     * the repository only needs to know whether aria2c is reachable, not the
+     * full sealed-class state.
+     */
+    override fun isRunning(): Boolean =
+        _processState.value is ProcessState.Running
 }

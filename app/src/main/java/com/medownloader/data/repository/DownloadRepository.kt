@@ -1,12 +1,9 @@
 package com.medownloader.data.repository
 
-import android.content.Context
 import android.util.Log
-import com.medownloader.data.Aria2RpcClient
 import com.medownloader.data.engine.*
 import com.medownloader.data.model.Aria2GlobalStat
 import com.medownloader.data.model.DownloadHistoryEntry
-import com.medownloader.data.source.Aria2ProcessManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,14 +44,13 @@ data class FileInfo(
 )
 
 class DownloadRepositoryImpl(
-    private val primaryEngine: YtDlpEngine,
-    private val fallbackEngine: Aria2Engine,
-    private val historyRepository: DownloadHistoryRepository,
-    private val queueRepository: DownloadQueueRepository,
+    private val primaryEngine: DownloadEngine,
+    private val fallbackEngine: DownloadEngine,
+    private val historyRepository: DownloadHistorySink,
+    private val queueRepository: DownloadQueueStore,
     // rpcClient kept only for getGlobalStats + applyRuntimeLimits — no download ops use it directly
-    private val rpcClient: Aria2RpcClient,
-    private val processManager: Aria2ProcessManager,
-    private val context: Context,
+    private val rpcClient: DownloadRpcOps,
+    private val processManager: EngineProcessController,
     private val settingsRepository: SettingsRepository? = null,
     private val diskSpaceProbe: com.medownloader.util.DiskSpaceProbe =
         com.medownloader.util.AndroidDiskSpaceProbe
@@ -67,11 +63,20 @@ class DownloadRepositoryImpl(
 
     // Which engine is currently handling a given GID
     private enum class EngineOwner { YT_DLP, ARIA2C }
-    private data class ActiveEntry(val job: Job, val owner: EngineOwner)
+    private data class ActiveEntry(
+        val job: Job,
+        val owner: EngineOwner,
+        // aria2's real hex gid, populated once the engine has called addUri.
+        // null while the entry is QUEUED or while the yt-dlp engine owns it.
+        @Volatile var realGid: String? = null
+    )
     private data class PendingDownload(val gid: String, val options: DownloadOptions, val route: EngineType)
 
     private val activeDownloads = ConcurrentHashMap<String, ActiveEntry>()
     private val downloadRegistry = ConcurrentHashMap<String, DownloadProgress>()
+    // aria2's hex gid -> our localId (the URL). Lets us translate engine emissions
+    // back to the stable localId the UI is tracking.
+    private val realGidToLocalId = ConcurrentHashMap<String, String>()
     private val startedAtByGid = ConcurrentHashMap<String, Long>()
     private val recordedTerminalStates = ConcurrentHashMap.newKeySet<String>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -108,7 +113,7 @@ class DownloadRepositoryImpl(
     }
 
     override suspend fun ensureEngineRunning(): Result<Unit> {
-        return if (processManager.processState.value == Aria2ProcessManager.ProcessState.Running) {
+        return if (processManager.isRunning()) {
             Result.success(Unit)
         } else {
             processManager.start()
@@ -121,6 +126,7 @@ class DownloadRepositoryImpl(
         processManager.stop()
         activeDownloads.clear()
         downloadRegistry.clear()
+        realGidToLocalId.clear()
         pendingQueue.clear()
         activeCount.set(0)
         _downloadsFlow.value = emptyList()
@@ -133,7 +139,10 @@ class DownloadRepositoryImpl(
 
         val route = ProtocolRouter.route(url)
         val options = DownloadOptions(url = url, filename = filename, protocolType = route)
-        val gid = url
+        // We use the URL itself as the stable local id. It is unique enough for the
+        // single-active-download-per-URL semantics the app guarantees, and it lets
+        // notification actions and intents reuse the same id without extra plumbing.
+        val localId = url
 
         ensureEngineRunning().onFailure { return Result.failure(it) }
 
@@ -142,17 +151,18 @@ class DownloadRepositoryImpl(
                 activeCount.incrementAndGet()
                 true
             } else {
-                pendingQueue.addLast(PendingDownload(gid, options, route))
+                pendingQueue.addLast(PendingDownload(localId, options, route))
                 false
             }
         }
 
         if (shouldLaunch) {
-            launchDownload(gid, options, route)
+            launchDownload(localId, options, route)
         } else {
-            // Show a QUEUED placeholder so the UI knows about it
-            downloadRegistry[gid] = DownloadProgress(
-                gid = gid,
+            // Show a QUEUED placeholder so the UI knows about it. Will be overwritten
+            // by handleProgress() once the engine actually starts.
+            downloadRegistry[localId] = DownloadProgress(
+                gid = localId,
                 status = DownloadStatus.QUEUED,
                 filename = options.filename ?: url,
                 downloadedBytes = 0,
@@ -165,33 +175,36 @@ class DownloadRepositoryImpl(
             persistQueue()
         }
 
-        return Result.success(gid)
+        return Result.success(localId)
     }
 
-    private fun launchDownload(gid: String, options: DownloadOptions, route: EngineType) {
-        activeDownloads[gid]?.job?.cancel()
+    private fun launchDownload(localId: String, options: DownloadOptions, route: EngineType) {
+        activeDownloads[localId]?.job?.cancel()
 
         val job = scope.launch {
             try {
-                collectDownload(gid, options, route)
+                collectDownload(localId, options, route)
             } finally {
                 activeCount.decrementAndGet()
-                activeDownloads.remove(gid)
+                // Clean up our reverse map once the job exits so a future re-add of
+                // the same URL doesn't see a stale realGid.
+                val finishedEntry = activeDownloads.remove(localId)
+                finishedEntry?.realGid?.let { realGidToLocalId.remove(it) }
                 drainQueue()
             }
         }
 
-        activeDownloads[gid] = ActiveEntry(job, engineOwnerFor(route))
+        activeDownloads[localId] = ActiveEntry(job, engineOwnerFor(route))
     }
 
-    private suspend fun collectDownload(gid: String, options: DownloadOptions, route: EngineType) {
+    private suspend fun collectDownload(localId: String, options: DownloadOptions, route: EngineType) {
         val flow = when (route) {
             EngineType.ARIA2C -> {
-                Log.d(TAG, "routing to aria2c: $gid")
+                Log.d(TAG, "routing to aria2c: $localId")
                 fallbackEngine.download(options)
             }
             EngineType.YT_DLP -> {
-                Log.d(TAG, "trying yt-dlp: $gid")
+                Log.d(TAG, "trying yt-dlp: $localId")
                 primaryEngine.download(options)
             }
         }
@@ -201,48 +214,79 @@ class DownloadRepositoryImpl(
 
         try {
             flow.collect { progress ->
-                startedAtByGid.putIfAbsent(progress.gid, System.currentTimeMillis())
+                handleProgress(localId, progress, currentEngineType, options.url)
 
                 // yt-dlp emitted an ERROR → switch to aria2c inline
                 if (!switchedToFallback && progress.status == DownloadStatus.ERROR && route == EngineType.YT_DLP) {
-                    Log.w(TAG, "yt-dlp error event, falling back to aria2c: $gid")
+                    Log.w(TAG, "yt-dlp error event, falling back to aria2c: $localId")
                     switchedToFallback = true
                     currentEngineType = EngineType.ARIA2C
-                    activeDownloads[gid]?.let { activeDownloads[gid] = it.copy(owner = EngineOwner.ARIA2C) }
+                    activeDownloads[localId]?.let {
+                        activeDownloads[localId] = it.copy(owner = EngineOwner.ARIA2C, realGid = null)
+                    }
                     fallbackEngine.download(options).collect { fp ->
-                        downloadRegistry[fp.gid] = fp.copy(engineType = EngineType.ARIA2C)
-                        publishState()
-                        recordHistoryIfTerminal(fp, options.url)
+                        handleProgress(localId, fp, EngineType.ARIA2C, options.url)
                     }
                     return@collect
                 }
-
-                downloadRegistry[progress.gid] = progress.copy(engineType = currentEngineType)
-                publishState()
-                recordHistoryIfTerminal(progress, options.url)
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // yt-dlp threw an exception → try aria2c fallback
             if (route == EngineType.YT_DLP && !switchedToFallback) {
-                Log.w(TAG, "yt-dlp threw, falling back to aria2c: $gid — ${e.message}")
-                activeDownloads[gid]?.let { activeDownloads[gid] = it.copy(owner = EngineOwner.ARIA2C) }
+                Log.w(TAG, "yt-dlp threw, falling back to aria2c: $localId — ${e.message}")
+                activeDownloads[localId]?.let {
+                    activeDownloads[localId] = it.copy(owner = EngineOwner.ARIA2C, realGid = null)
+                }
                 try {
                     fallbackEngine.download(options).collect { fp ->
-                        downloadRegistry[fp.gid] = fp.copy(engineType = EngineType.ARIA2C)
-                        publishState()
-                        recordHistoryIfTerminal(fp, options.url)
+                        handleProgress(localId, fp, EngineType.ARIA2C, options.url)
                     }
                 } catch (fe: CancellationException) {
                     throw fe
                 } catch (fe: Exception) {
-                    emitError(gid, options, fe)
+                    emitError(localId, options, fe)
                 }
             } else {
-                emitError(gid, options, e)
+                emitError(localId, options, e)
             }
         }
+    }
+
+    /**
+     * Normalize a progress event from an engine onto our stable [localId]:
+     *
+     *  - The engine emits with whatever [DownloadProgress.gid] it produces (aria2's hex
+     *    gid, or the URL for yt-dlp).
+     *  - We learn aria2's real hex gid here and remember it on the [ActiveEntry] so
+     *    pause/resume/remove can route directly to aria2 by gid.
+     *  - We always store the registry entry under [localId] so the UI sees one stable
+     *    download row and the QUEUED placeholder gets overwritten cleanly when the
+     *    engine actually starts.
+     */
+    private suspend fun handleProgress(
+        localId: String,
+        progress: DownloadProgress,
+        engineType: EngineType,
+        url: String
+    ) {
+        startedAtByGid.putIfAbsent(localId, System.currentTimeMillis())
+
+        // Remember aria2's real hex gid the moment the engine reports it.
+        if (engineType == EngineType.ARIA2C && progress.gid != localId && progress.gid != "error") {
+            realGidToLocalId[progress.gid] = localId
+            activeDownloads[localId]?.let {
+                if (it.realGid != progress.gid) {
+                    activeDownloads[localId] = it.copy(realGid = progress.gid)
+                }
+            }
+        }
+
+        val normalized = progress.copy(gid = localId, engineType = engineType)
+        downloadRegistry[localId] = normalized
+        publishState()
+        recordHistoryIfTerminal(normalized, url)
     }
 
     private suspend fun emitError(gid: String, options: DownloadOptions, e: Exception) {
@@ -300,34 +344,86 @@ class DownloadRepositoryImpl(
         EngineType.ARIA2C -> EngineOwner.ARIA2C
     }
 
+    /**
+     * Resolve whatever id the caller passes to our internal localId. We accept both
+     * the localId (URL) the UI usually sees and aria2's hex gid (used by notification
+     * actions and any background path that has only the engine-level gid).
+     */
+    private fun resolveLocalId(gid: String): String {
+        if (activeDownloads.containsKey(gid) || downloadRegistry.containsKey(gid)) return gid
+        return realGidToLocalId[gid] ?: gid
+    }
+
     override suspend fun pauseDownload(gid: String): Result<Unit> {
-        return when (activeDownloads[gid]?.owner) {
+        val localId = resolveLocalId(gid)
+        val entry = activeDownloads[localId]
+        return when (entry?.owner) {
             EngineOwner.YT_DLP -> Result.failure(
                 UnsupportedOperationException("yt-dlp downloads cannot be paused")
             )
-            EngineOwner.ARIA2C, null -> fallbackEngine.pause(gid)
+            EngineOwner.ARIA2C, null -> {
+                val realGid = entry?.realGid ?: realGidToLocalId.entries
+                    .firstOrNull { it.value == localId }?.key
+                if (realGid == null) {
+                    Result.failure(IllegalStateException("download has not started yet"))
+                } else {
+                    fallbackEngine.pause(realGid)
+                }
+            }
         }
     }
 
     override suspend fun resumeDownload(gid: String): Result<Unit> {
-        return when (activeDownloads[gid]?.owner) {
+        val localId = resolveLocalId(gid)
+        val entry = activeDownloads[localId]
+        return when (entry?.owner) {
             EngineOwner.YT_DLP -> Result.failure(
                 UnsupportedOperationException("yt-dlp downloads cannot be resumed")
             )
-            EngineOwner.ARIA2C, null -> fallbackEngine.resume(gid)
+            EngineOwner.ARIA2C, null -> {
+                val realGid = entry?.realGid ?: realGidToLocalId.entries
+                    .firstOrNull { it.value == localId }?.key
+                if (realGid == null) {
+                    Result.failure(IllegalStateException("download has not started yet"))
+                } else {
+                    fallbackEngine.resume(realGid)
+                }
+            }
         }
     }
 
     override suspend fun removeDownload(gid: String): Result<Unit> {
-        // Remove from pending queue first
+        val localId = resolveLocalId(gid)
+
+        // Drop any pending queue entry first so it doesn't drain into a fresh download.
         poolMutex.withLock {
-            pendingQueue.removeAll { it.gid == gid }
+            pendingQueue.removeAll { it.gid == localId }
         }
-        activeDownloads.remove(gid)?.job?.cancel()
-        downloadRegistry.remove(gid)
+
+        // Cancel the in-flight job (if any). This breaks Aria2Engine's polling loop
+        // immediately so we don't leak it after telling aria2 to forget the download.
+        val entry = activeDownloads.remove(localId)
+        entry?.job?.cancel()
+
+        // Drop our registry entry and any aria2-keyed reverse mapping.
+        downloadRegistry.remove(localId)
+        val realGid = entry?.realGid
+            ?: realGidToLocalId.entries.firstOrNull { it.value == localId }?.key
+        if (realGid != null) {
+            realGidToLocalId.remove(realGid)
+            // Some older paths may have left a hex-keyed entry from before this fix;
+            // clear it too so the UI doesn't keep a ghost row around.
+            downloadRegistry.remove(realGid)
+        }
         publishState()
-        // Best-effort stop on aria2c side (may already be gone)
-        return fallbackEngine.stop(gid)
+
+        // Best-effort: tell aria2 to forget the download. Safe to call even if the
+        // gid is unknown (aria2 just returns an error we ignore via Result).
+        return if (realGid != null) {
+            fallbackEngine.stop(realGid)
+        } else {
+            Result.success(Unit)
+        }
     }
 
     // Reactive — no polling, updated on every progress event
@@ -456,7 +552,7 @@ class DownloadRepositoryImpl(
         val safeConn = connectionLimit.coerceIn(1, 16)
         this.maxConcurrent = safeMax
 
-        if (processManager.processState.value != Aria2ProcessManager.ProcessState.Running) {
+        if (!processManager.isRunning()) {
             return Result.success(Unit)
         }
 

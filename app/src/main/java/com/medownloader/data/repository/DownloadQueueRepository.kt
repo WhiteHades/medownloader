@@ -18,7 +18,7 @@ private val Context.queueDataStore by preferencesDataStore(name = "download_queu
  * Persists the pending download queue so it survives app/process death.
  * On next launch, the repository can restore queued items and resume them.
  */
-class DownloadQueueRepository(private val context: Context) {
+class DownloadQueueRepository(private val context: Context) : DownloadQueueStore {
 
     private object Keys {
         val QUEUE = stringPreferencesKey("pending_queue")
@@ -36,7 +36,7 @@ class DownloadQueueRepository(private val context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    suspend fun save(items: List<QueuedDownload>) {
+    override suspend fun save(items: List<QueuedDownload>) {
         context.queueDataStore.edit { prefs ->
             prefs[Keys.QUEUE] = json.encodeToString(
                 ListSerializer(QueuedDownload.serializer()),
@@ -45,13 +45,13 @@ class DownloadQueueRepository(private val context: Context) {
         }
     }
 
-    suspend fun clear() {
+    override suspend fun clear() {
         context.queueDataStore.edit { prefs ->
             prefs.remove(Keys.QUEUE)
         }
     }
 
-    suspend fun snapshot(): List<QueuedDownload> = queue.first()
+    override suspend fun snapshot(): List<QueuedDownload> = queue.first()
 }
 
 @Serializable

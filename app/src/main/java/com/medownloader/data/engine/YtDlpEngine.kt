@@ -142,7 +142,7 @@ class YtDlpEngine(
         }
     }
 
-    suspend fun fetchInfo(url: String): Result<FileInfo> = withContext(Dispatchers.IO) {
+    override suspend fun fetchInfo(url: String): Result<FileInfo> = withContext(Dispatchers.IO) {
         runCatching {
             val py = Python.getInstance()
             val ytdlp = py.getModule("yt_dlp")

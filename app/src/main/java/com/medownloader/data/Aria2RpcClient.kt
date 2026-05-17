@@ -34,7 +34,7 @@ import android.util.Base64
 class Aria2RpcClient(
     private val rpcUrl: String = "http://localhost:6800/jsonrpc",
     private val secret: String = "medownloader-secret"
-) {
+) : com.medownloader.data.repository.DownloadRpcOps {
     private val client = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
@@ -438,7 +438,7 @@ class Aria2RpcClient(
      * - max-concurrent-downloads, max-overall-download-limit
      * - max-overall-upload-limit, save-session, etc.
      */
-    suspend fun changeGlobalOption(options: Map<String, String>): Result<String> = 
+    override suspend fun changeGlobalOption(options: Map<String, String>): Result<String> =
         withContext(Dispatchers.IO) {
             val params = buildJsonArray {
                 add("token:$secret")
@@ -457,7 +457,7 @@ class Aria2RpcClient(
      * 
      * From docs: "aria2.getGlobalStat([secret])"
      */
-    suspend fun getGlobalStat(): Result<Aria2GlobalStat> = withContext(Dispatchers.IO) {
+    override suspend fun getGlobalStat(): Result<Aria2GlobalStat> = withContext(Dispatchers.IO) {
         val params = buildJsonArray { add("token:$secret") }
         executeRpc("aria2.getGlobalStat", params)
     }
@@ -497,7 +497,7 @@ class Aria2RpcClient(
     /**
      * Gracefully shutdown aria2.
      */
-    suspend fun shutdown(): Result<String> = withContext(Dispatchers.IO) {
+    override suspend fun shutdown(): Result<String> = withContext(Dispatchers.IO) {
         val params = buildJsonArray { add("token:$secret") }
         executeRpc<JsonPrimitive>("aria2.shutdown", params).map { it.content }
     }
